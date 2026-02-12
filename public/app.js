@@ -1,33 +1,50 @@
 ﻿const elements = {
+  refreshSessionsBtn: document.getElementById('refreshSessionsBtn'),
+  sessionSelect: document.getElementById('sessionSelect'),
+  newSessionName: document.getElementById('newSessionName'),
+  createSessionBtn: document.getElementById('createSessionBtn'),
+  startSessionBtn: document.getElementById('startSessionBtn'),
+  stopSessionBtn: document.getElementById('stopSessionBtn'),
+  deleteSessionBtn: document.getElementById('deleteSessionBtn'),
+  sessionInfo: document.getElementById('sessionInfo'),
+
   statusText: document.getElementById('statusText'),
   errorText: document.getElementById('errorText'),
   qrImage: document.getElementById('qrImage'),
   qrHint: document.getElementById('qrHint'),
+
   chatList: document.getElementById('chatList'),
+  refreshStatusBtn: document.getElementById('refreshStatusBtn'),
+  refreshChatsBtn: document.getElementById('refreshChatsBtn'),
+
   destinationSelect: document.getElementById('destinationSelect'),
   keywordInput: document.getElementById('keywordInput'),
   addKeywordBtn: document.getElementById('addKeywordBtn'),
   keywordList: document.getElementById('keywordList'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-  refreshStatusBtn: document.getElementById('refreshStatusBtn'),
-  refreshChatsBtn: document.getElementById('refreshChatsBtn'),
   settingsInfo: document.getElementById('settingsInfo'),
+
   toggleLogsBtn: document.getElementById('toggleLogsBtn'),
   logsContainer: document.getElementById('logsContainer'),
   logList: document.getElementById('logList')
 };
 
 const state = {
+  sessions: [],
+  activeSessionId: '',
+  sessionRuntime: null,
+
   status: null,
   chats: [],
-  ui: {
-    showLogs: true
-  },
   settings: {
     sourceChatIds: [],
     destinationChatId: '',
     keywords: [],
     enabled: false
+  },
+
+  ui: {
+    showLogs: true
   }
 };
 
@@ -40,14 +57,34 @@ function escapeHtml(input) {
     .replaceAll("'", '&#39;');
 }
 
+async function api(url, options) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload.error || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
 function loadUiPreferences() {
-  const raw = localStorage.getItem('wa_ui_show_logs');
-  if (raw === '0') {
-    state.ui.showLogs = false;
+  const rawLogs = localStorage.getItem('wa_ui_show_logs');
+  state.ui.showLogs = rawLogs !== '0';
+
+  const rawSession = localStorage.getItem('wa_active_session');
+  if (rawSession) {
+    state.activeSessionId = rawSession;
   }
 }
 
-function saveUiPreferences() {
+function saveActiveSession(id) {
+  state.activeSessionId = id;
+  localStorage.setItem('wa_active_session', id);
+}
+
+function saveLogsPref() {
   localStorage.setItem('wa_ui_show_logs', state.ui.showLogs ? '1' : '0');
 }
 
@@ -61,16 +98,148 @@ function renderLogsVisibility() {
   }
 }
 
-async function api(url, options) {
-  const response = await fetch(url, options);
-  const payload = await response.json().catch(() => ({}));
+function sessionLabel(runtime) {
+  if (!runtime) {
+    return 'Невідомо';
+  }
+  const map = {
+    stopped: 'Зупинена',
+    starting: 'Запускається',
+    running: 'Працює',
+    stopping: 'Зупиняється',
+    error: 'Помилка'
+  };
+  return map[runtime.status] || runtime.status;
+}
 
-  if (!response.ok) {
-    const message = payload.error || `HTTP ${response.status}`;
-    throw new Error(message);
+function statusLabel(code) {
+  const map = {
+    starting: 'Запуск',
+    qr: 'Потрібна авторизація (QR)',
+    authenticated: 'Авторизовано, очікується готовність',
+    ready: 'Готово до роботи',
+    auth_failure: 'Помилка авторизації',
+    disconnected: 'Відключено',
+    init_error: 'Помилка ініціалізації'
+  };
+
+  return map[code] || code || 'Невідомо';
+}
+
+function activeSession() {
+  return state.sessions.find((s) => s.id === state.activeSessionId) || null;
+}
+
+function renderSessions() {
+  if (!Array.isArray(state.sessions) || state.sessions.length === 0) {
+    elements.sessionSelect.innerHTML = '<option value="">Немає сесій</option>';
+    elements.sessionInfo.textContent = 'Створіть сесію, щоб почати.';
+    return;
   }
 
-  return payload;
+  const options = state.sessions.map((s) => {
+    const rt = s.runtime || {};
+    const selected = s.id === state.activeSessionId ? 'selected' : '';
+    const suffix = rt && rt.status ? ` (${sessionLabel(rt)})` : '';
+    return `<option value="${escapeHtml(s.id)}" ${selected}>${escapeHtml(s.name || s.id)}${escapeHtml(
+      suffix
+    )}</option>`;
+  });
+
+  elements.sessionSelect.innerHTML = options.join('');
+
+  const s = activeSession();
+  if (!s) {
+    elements.sessionInfo.textContent = 'Оберіть сесію.';
+    return;
+  }
+
+  const rt = s.runtime || null;
+  state.sessionRuntime = rt;
+
+  const pid = rt && rt.pid ? `pid=${rt.pid}` : 'pid=-';
+  const err = rt && rt.lastError ? `, помилка: ${rt.lastError}` : '';
+  elements.sessionInfo.textContent = `Сесія: ${s.id}, стан: ${sessionLabel(rt)} (${pid})${err}`;
+
+  const running = rt && rt.status === 'running';
+  elements.startSessionBtn.disabled = running;
+  elements.stopSessionBtn.disabled = !running;
+}
+
+async function loadSessions() {
+  const payload = await api('/api/sessions');
+  state.sessions = payload.sessions || [];
+
+  if (!state.activeSessionId) {
+    state.activeSessionId = state.sessions[0] ? state.sessions[0].id : '';
+  }
+
+  // If previously selected session no longer exists, pick first.
+  if (state.activeSessionId && !state.sessions.some((s) => s.id === state.activeSessionId)) {
+    state.activeSessionId = state.sessions[0] ? state.sessions[0].id : '';
+  }
+
+  renderSessions();
+}
+
+async function createSession() {
+  const name = elements.newSessionName.value.trim();
+  const payload = await api('/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+
+  elements.newSessionName.value = '';
+  await loadSessions();
+
+  if (payload.id) {
+    saveActiveSession(payload.id);
+    renderSessions();
+    // Auto-start new session for QR convenience.
+    await startSession();
+  }
+}
+
+async function startSession() {
+  if (!state.activeSessionId) {
+    return;
+  }
+  await api(`/api/sessions/${state.activeSessionId}/start`, { method: 'POST' });
+  await loadSessions();
+  await loadStatus();
+}
+
+async function stopSession() {
+  if (!state.activeSessionId) {
+    return;
+  }
+  await api(`/api/sessions/${state.activeSessionId}/stop`, { method: 'POST' });
+  await loadSessions();
+  await clearSessionUi();
+}
+
+async function deleteSession() {
+  if (!state.activeSessionId) {
+    return;
+  }
+
+  const ok = window.confirm('Видалити сесію? За потреби можна видалити дані на диску вручну.');
+  if (!ok) {
+    return;
+  }
+
+  await api(`/api/sessions/${state.activeSessionId}?deleteData=0`, { method: 'DELETE' });
+  saveActiveSession('');
+  await loadSessions();
+  await clearSessionUi();
+}
+
+async function apiSession(endpoint, options) {
+  if (!state.activeSessionId) {
+    throw new Error('Оберіть сесію.');
+  }
+  return await api(`/api/sessions/${state.activeSessionId}${endpoint}`, options);
 }
 
 function selectedChatIdsFromUi() {
@@ -105,23 +274,11 @@ function removeKeyword(keyword) {
   renderKeywords();
 }
 
-function statusLabel(code) {
-  const map = {
-    starting: 'Запуск',
-    qr: 'Потрібна авторизація (QR)',
-    authenticated: 'Авторизовано, очікується готовність',
-    ready: 'Готово до роботи',
-    auth_failure: 'Помилка авторизації',
-    disconnected: 'Відключено',
-    init_error: 'Помилка ініціалізації'
-  };
-
-  return map[code] || code || 'Невідомо';
-}
-
 function renderStatus() {
   const current = state.status;
+
   if (!current) {
+    elements.statusText.textContent = 'Немає даних';
     return;
   }
 
@@ -148,9 +305,25 @@ function renderStatus() {
   }
 }
 
+function renderDestinationOptions() {
+  const groups = state.chats.filter((chat) => chat.isGroup);
+  const options = ['<option value="">Оберіть групу</option>'];
+
+  for (const chat of groups) {
+    const selected = state.settings.destinationChatId === chat.id ? 'selected' : '';
+    options.push(`<option value="${escapeHtml(chat.id)}" ${selected}>${escapeHtml(chat.name)}</option>`);
+  }
+
+  if (groups.length === 0) {
+    options.push('<option value="" disabled>Групи недоступні</option>');
+  }
+
+  elements.destinationSelect.innerHTML = options.join('');
+}
+
 function renderChatList() {
   if (!state.status || !state.status.ready) {
-    elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після авторизації.</p>';
+    elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>';
     return;
   }
 
@@ -168,7 +341,9 @@ function renderChatList() {
       const isDestination = destinationId && chat.id === destinationId;
       const disabled = isDestination ? 'disabled' : '';
       const checked = !isDestination && selected.has(chat.id) ? 'checked' : '';
-      const hint = isDestination ? '<span class="text-xs text-gray-500 block mt-1">Кінцева група (джерело вимкнено)</span>' : '';
+      const hint = isDestination
+        ? '<span class="text-xs text-gray-500 block mt-1">Кінцева група (джерело вимкнено)</span>'
+        : '';
 
       return `
         <label class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent ${isDestination ? 'opacity-60' : ''}">
@@ -184,22 +359,6 @@ function renderChatList() {
     .join('');
 
   elements.chatList.innerHTML = html;
-}
-
-function renderDestinationOptions() {
-  const groups = state.chats.filter((chat) => chat.isGroup);
-  const options = ['<option value="">Оберіть групу</option>'];
-
-  for (const chat of groups) {
-    const selected = state.settings.destinationChatId === chat.id ? 'selected' : '';
-    options.push(`<option value="${escapeHtml(chat.id)}" ${selected}>${escapeHtml(chat.name)}</option>`);
-  }
-
-  if (groups.length === 0) {
-    options.push('<option value="" disabled>Групи недоступні</option>');
-  }
-
-  elements.destinationSelect.innerHTML = options.join('');
 }
 
 function renderKeywords() {
@@ -258,12 +417,29 @@ function renderLogs(logs) {
   elements.logList.innerHTML = html;
 }
 
+async function clearSessionUi() {
+  state.status = null;
+  state.chats = [];
+  state.settings = { sourceChatIds: [], destinationChatId: '', keywords: [], enabled: false };
+
+  elements.statusText.textContent = 'Сесію зупинено або не обрано.';
+  elements.errorText.classList.add('hidden');
+  elements.qrImage.classList.add('hidden');
+  elements.qrImage.removeAttribute('src');
+  elements.qrHint.textContent = 'Запустіть сесію. Якщо потрібна авторизація, QR зʼявиться тут.';
+  elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>';
+  elements.destinationSelect.innerHTML = '<option value="">Оберіть групу</option>';
+  elements.keywordList.innerHTML = '<p class="text-gray-500">Ключові слова ще не додані.</p>';
+  elements.settingsInfo.textContent = '';
+}
+
 async function loadStatus() {
   try {
-    state.status = await api('/api/status');
+    state.status = await apiSession('/status');
     renderStatus();
   } catch (error) {
-    elements.statusText.textContent = 'Помилка запиту';
+    state.status = null;
+    elements.statusText.textContent = 'Сесія не запущена';
     elements.errorText.classList.remove('hidden');
     elements.errorText.textContent = error.message;
   }
@@ -271,7 +447,7 @@ async function loadStatus() {
 
 async function loadSettings() {
   try {
-    state.settings = await api('/api/settings');
+    state.settings = await apiSession('/settings');
     state.settings.keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
     renderSettings();
   } catch (error) {
@@ -287,7 +463,7 @@ async function loadChats(forceRefresh = false) {
 
   try {
     const query = forceRefresh ? '?refresh=1' : '';
-    const payload = await api(`/api/chats${query}`);
+    const payload = await apiSession(`/chats${query}`);
     state.chats = payload.chats || [];
     renderSettings();
   } catch (error) {
@@ -301,7 +477,7 @@ async function loadLogs() {
   }
 
   try {
-    const payload = await api('/api/logs');
+    const payload = await apiSession('/logs');
     renderLogs(payload.logs);
   } catch (error) {
     elements.logList.innerHTML = `<p class="text-red-600">Помилка журналу: ${escapeHtml(error.message)}</p>`;
@@ -316,7 +492,7 @@ async function saveSettings() {
   };
 
   try {
-    state.settings = await api('/api/settings', {
+    state.settings = await apiSession('/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -332,29 +508,94 @@ async function saveSettings() {
   }
 }
 
-async function bootstrap() {
-  loadUiPreferences();
-  renderLogsVisibility();
+async function onSessionChanged(id) {
+  saveActiveSession(id);
+  await loadSessions();
 
+  // Try to load status/settings/chats/logs if running.
   await loadStatus();
   await loadSettings();
   await loadChats(true);
   await loadLogs();
+}
+
+async function bootstrap() {
+  loadUiPreferences();
+  renderLogsVisibility();
+
+  await loadSessions();
+  renderSessions();
+
+  if (state.activeSessionId) {
+    await loadStatus();
+    await loadSettings();
+    await loadChats(true);
+    await loadLogs();
+  } else {
+    await clearSessionUi();
+  }
 
   setInterval(async () => {
-    await loadStatus();
-    await loadChats(false);
+    await loadSessions();
+    if (state.activeSessionId) {
+      await loadStatus();
+      await loadChats(false);
+    }
   }, 5000);
 
   setInterval(loadLogs, 5000);
 }
 
+// Session controls
+
+elements.refreshSessionsBtn.addEventListener('click', loadSessions);
+
+elements.sessionSelect.addEventListener('change', async () => {
+  const id = elements.sessionSelect.value;
+  await onSessionChanged(id);
+});
+
+elements.createSessionBtn.addEventListener('click', async () => {
+  try {
+    await createSession();
+  } catch (error) {
+    elements.sessionInfo.textContent = `Помилка створення сесії: ${error.message}`;
+  }
+});
+
+elements.startSessionBtn.addEventListener('click', async () => {
+  try {
+    await startSession();
+  } catch (error) {
+    elements.sessionInfo.textContent = `Помилка запуску: ${error.message}`;
+  }
+});
+
+elements.stopSessionBtn.addEventListener('click', async () => {
+  try {
+    await stopSession();
+  } catch (error) {
+    elements.sessionInfo.textContent = `Помилка зупинки: ${error.message}`;
+  }
+});
+
+elements.deleteSessionBtn.addEventListener('click', async () => {
+  try {
+    await deleteSession();
+  } catch (error) {
+    elements.sessionInfo.textContent = `Помилка видалення: ${error.message}`;
+  }
+});
+
+// Main controls
+
 elements.refreshStatusBtn.addEventListener('click', loadStatus);
 elements.refreshChatsBtn.addEventListener('click', () => loadChats(true));
 elements.saveSettingsBtn.addEventListener('click', saveSettings);
+
 elements.toggleLogsBtn.addEventListener('click', () => {
   state.ui.showLogs = !state.ui.showLogs;
-  saveUiPreferences();
+  saveLogsPref();
   renderLogsVisibility();
 });
 
@@ -367,7 +608,6 @@ elements.keywordInput.addEventListener('keydown', (event) => {
 });
 
 elements.destinationSelect.addEventListener('change', () => {
-  // Prevent recursion: destination group cannot be selected as a scan source.
   state.settings.destinationChatId = elements.destinationSelect.value;
   renderChatList();
 });

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WA Монітор</title>
+    <title>WA Монітор (Сесії)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link
       rel="stylesheet"
@@ -15,9 +15,81 @@
       <header class="border border-gray-200 rounded-xl p-4 bg-white">
         <h1 class="text-2xl font-semibold">Монітор повідомлень WhatsApp</h1>
         <p class="text-sm text-gray-600 mt-1">
-          Авторизація через QR, вибір чатів для сканування та пересилання повідомлень за ключовими словами у кінцеву групу.
+          Багатосесійний режим: створюйте окремі сесії з власною авторизацією та налаштуваннями.
         </p>
       </header>
+
+      <section class="border border-gray-200 rounded-xl p-4 bg-white space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-lg font-medium"><i class="fa-solid fa-layer-group mr-2"></i>Сесії</h2>
+          <button
+            id="refreshSessionsBtn"
+            type="button"
+            class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Оновити список
+          </button>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-3">
+          <label class="block text-sm md:col-span-2">
+            <span class="font-medium">Активна сесія</span>
+            <select id="sessionSelect" class="mt-1 w-full border border-gray-300 rounded-lg p-2 bg-white">
+              <option value="">Завантаження...</option>
+            </select>
+          </label>
+
+          <div class="flex items-end gap-2">
+            <button
+              id="startSessionBtn"
+              type="button"
+              class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Запустити
+            </button>
+            <button
+              id="stopSessionBtn"
+              type="button"
+              class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Зупинити
+            </button>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-3">
+          <label class="block text-sm md:col-span-2">
+            <span class="font-medium">Нова сесія</span>
+            <div class="mt-1 flex gap-2">
+              <input
+                id="newSessionName"
+                type="text"
+                placeholder="Напр. Акаунт 1"
+                class="flex-1 border border-gray-300 rounded-lg p-2"
+              />
+              <button
+                id="createSessionBtn"
+                type="button"
+                class="px-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Створити
+              </button>
+            </div>
+          </label>
+
+          <div class="flex items-end">
+            <button
+              id="deleteSessionBtn"
+              type="button"
+              class="w-full px-3 py-2 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+            >
+              Видалити сесію
+            </button>
+          </div>
+        </div>
+
+        <p id="sessionInfo" class="text-sm text-gray-600"></p>
+      </section>
 
       <section class="grid lg:grid-cols-3 gap-4">
         <article class="border border-gray-200 rounded-xl p-4 bg-white lg:col-span-2">
@@ -35,7 +107,7 @@
 
           <div class="mt-4 space-y-2 text-sm">
             <p>
-              Стан: <span id="statusText" class="font-medium">Завантаження...</span>
+              Стан: <span id="statusText" class="font-medium">Оберіть сесію...</span>
             </p>
             <p id="errorText" class="text-red-600 hidden"></p>
           </div>
@@ -46,7 +118,7 @@
             <i class="fa-solid fa-qrcode mr-2"></i>QR авторизації
           </h2>
           <p id="qrHint" class="text-sm text-gray-600 mt-2">
-            Якщо QR доступний, відскануйте його у WhatsApp на телефоні.
+            Запустіть сесію. Якщо потрібна авторизація, QR зʼявиться тут.
           </p>
           <img
             id="qrImage"
@@ -71,7 +143,7 @@
           </div>
 
           <div id="chatList" class="mt-4 border border-gray-200 rounded-lg p-3 h-80 overflow-auto space-y-2 text-sm">
-            <p class="text-gray-500">Список чатів буде доступний після авторизації.</p>
+            <p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>
           </div>
         </article>
 
@@ -135,7 +207,7 @@
         </div>
         <div id="logsContainer" class="mt-3">
           <div id="logList" class="h-52 overflow-auto border border-gray-200 rounded-lg p-3 text-sm space-y-2">
-            <p class="text-gray-500">Події зʼявляться після запуску сервера.</p>
+            <p class="text-gray-500">Події зʼявляться після запуску сесії.</p>
           </div>
         </div>
       </section>

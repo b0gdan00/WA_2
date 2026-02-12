@@ -4,3 +4,5 @@
 npm-debug.log*
 logs/
 data/
+sessions/
+manager-data/
