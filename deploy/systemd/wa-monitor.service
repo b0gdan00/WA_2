@@ -1,0 +1,19 @@
+﻿[Unit]
+Description=WA Monitor (whatsapp-web.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/wa_2
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=3
+Environment=PORT=3000
+
+# Create a dedicated user and set correct ownership for /opt/wa_2
+User=wa
+Group=wa
+
+[Install]
+WantedBy=multi-user.target

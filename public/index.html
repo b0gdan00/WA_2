@@ -1,0 +1,146 @@
+﻿<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WA Монітор</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    />
+  </head>
+  <body class="bg-white text-gray-900 min-h-screen">
+    <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <header class="border border-gray-200 rounded-xl p-4 bg-white">
+        <h1 class="text-2xl font-semibold">Монітор повідомлень WhatsApp</h1>
+        <p class="text-sm text-gray-600 mt-1">
+          Авторизація через QR, вибір чатів для сканування та пересилання повідомлень за ключовими словами у кінцеву групу.
+        </p>
+      </header>
+
+      <section class="grid lg:grid-cols-3 gap-4">
+        <article class="border border-gray-200 rounded-xl p-4 bg-white lg:col-span-2">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-lg font-medium">
+              <i class="fa-solid fa-link mr-2"></i>Статус підключення
+            </h2>
+            <button
+              id="refreshStatusBtn"
+              class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Оновити
+            </button>
+          </div>
+
+          <div class="mt-4 space-y-2 text-sm">
+            <p>
+              Стан: <span id="statusText" class="font-medium">Завантаження...</span>
+            </p>
+            <p id="errorText" class="text-red-600 hidden"></p>
+          </div>
+        </article>
+
+        <article class="border border-gray-200 rounded-xl p-4 bg-white">
+          <h2 class="text-lg font-medium">
+            <i class="fa-solid fa-qrcode mr-2"></i>QR авторизації
+          </h2>
+          <p id="qrHint" class="text-sm text-gray-600 mt-2">
+            Якщо QR доступний, відскануйте його у WhatsApp на телефоні.
+          </p>
+          <img
+            id="qrImage"
+            alt="QR для входу"
+            class="mt-3 border border-gray-200 rounded-lg w-full max-w-xs hidden"
+          />
+        </article>
+      </section>
+
+      <section class="grid lg:grid-cols-2 gap-4">
+        <article class="border border-gray-200 rounded-xl p-4 bg-white">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-lg font-medium">
+              <i class="fa-solid fa-comments mr-2"></i>Чати для сканування
+            </h2>
+            <button
+              id="refreshChatsBtn"
+              class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Оновити чати
+            </button>
+          </div>
+
+          <div id="chatList" class="mt-4 border border-gray-200 rounded-lg p-3 h-80 overflow-auto space-y-2 text-sm">
+            <p class="text-gray-500">Список чатів буде доступний після авторизації.</p>
+          </div>
+        </article>
+
+        <article class="border border-gray-200 rounded-xl p-4 bg-white space-y-4">
+          <h2 class="text-lg font-medium">
+            <i class="fa-solid fa-filter mr-2"></i>Правила фільтрації
+          </h2>
+
+          <label class="block text-sm">
+            <span class="font-medium">Кінцева група</span>
+            <select id="destinationSelect" class="mt-1 w-full border border-gray-300 rounded-lg p-2 bg-white">
+              <option value="">Оберіть групу</option>
+            </select>
+          </label>
+
+          <div class="block text-sm">
+            <span class="font-medium">Ключові слова</span>
+            <div class="mt-1 flex gap-2">
+              <input
+                id="keywordInput"
+                type="text"
+                placeholder="Напр. акція"
+                class="flex-1 border border-gray-300 rounded-lg p-2"
+              />
+              <button
+                id="addKeywordBtn"
+                type="button"
+                class="px-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Додати
+              </button>
+            </div>
+            <div id="keywordList" class="mt-2 flex flex-wrap gap-2">
+              <p class="text-gray-500">Ключові слова ще не додані.</p>
+            </div>
+          </div>
+
+          <button
+            id="saveSettingsBtn"
+            class="w-full py-2 px-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Зберегти налаштування
+          </button>
+
+          <p id="settingsInfo" class="text-sm text-gray-600"></p>
+        </article>
+      </section>
+
+      <section class="border border-gray-200 rounded-xl p-4 bg-white">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-lg font-medium">
+            <i class="fa-solid fa-list mr-2"></i>Журнал
+          </h2>
+          <button
+            id="toggleLogsBtn"
+            type="button"
+            class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Сховати
+          </button>
+        </div>
+        <div id="logsContainer" class="mt-3">
+          <div id="logList" class="h-52 overflow-auto border border-gray-200 rounded-lg p-3 text-sm space-y-2">
+            <p class="text-gray-500">Події зʼявляться після запуску сервера.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
