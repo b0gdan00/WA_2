@@ -30,13 +30,20 @@
       </header>
 
       <div class="space-y-6">
-        <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-5">
+        <section class="bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-5">
+          <div class="space-y-1">
+            <div class="text-lg font-semibold text-gray-900">Сесії</div>
+            <div class="text-sm text-gray-500">
+              Обирайте або створюйте багатосесійні екземпляри WhatsApp і слідкуйте за їхнім станом на ходу.
+            </div>
+          </div>
+
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div class="w-full lg:max-w-sm space-y-1">
               <label class="text-sm font-semibold text-gray-600">Активна сесія</label>
               <select
                 id="sessionSelect"
-                class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                class="w-full border border-gray-200 rounded-md px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
                 <option value="">Завантаження...</option>
               </select>
@@ -44,127 +51,142 @@
             <div class="flex flex-wrap gap-3">
               <button
                 id="refreshSessionsBtn"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
               >
-                Оновити список
+                <i class="fas fa-rotate-left"></i>
+                <span>Оновити список</span>
               </button>
               <button
                 id="startSessionBtn"
-                class="px-4 py-2 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100"
+                class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
               >
-                Запустити
+                <i class="fas fa-play"></i>
+                <span>Запустити</span>
               </button>
               <button
                 id="stopSessionBtn"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
               >
-                Зупинити
+                <i class="fas fa-stop"></i>
+                <span>Зупинити</span>
               </button>
             </div>
           </div>
 
           <div class="grid md:grid-cols-[1.6fr_0.9fr] gap-4">
-            <label class="text-sm font-semibold text-gray-600">
-              Нова сесія
+            <label class="text-sm font-semibold text-gray-600 space-y-2">
+              <span>Нова сесія</span>
               <div class="mt-2 flex gap-2">
                 <input
                   id="newSessionName"
                   type="text"
                   placeholder="Наприклад: Акаунт 1"
-                  class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  class="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
                 <button
                   id="createSessionBtn"
-                  class="px-3 py-2 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100"
+                  class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
                 >
-                  Створити
+                  <i class="fas fa-plus"></i>
+                  <span>Створити</span>
                 </button>
               </div>
             </label>
             <div class="flex items-end">
               <button
                 id="deleteSessionBtn"
-                class="w-full px-3 py-2 rounded-xl border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50"
+                class="w-full bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md border border-red-200 text-sm font-medium flex items-center gap-2 text-red-700"
               >
-                Видалити сесію
+                <i class="fas fa-trash"></i>
+                <span>Видалити сесію</span>
               </button>
             </div>
           </div>
 
-          <p id="sessionInfo" class="text-sm text-gray-600">Завантаження інформації про сесію...</p>
+          <p id="sessionInfo" class="text-sm text-gray-600">Завантаження інформації про з'єднання...</p>
         </section>
 
         <section class="grid lg:grid-cols-[1.4fr_0.8fr] gap-4">
-          <article class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <article class="bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-4">
+            <div class="space-y-1">
+              <div class="text-lg font-semibold text-gray-900">Статус підключення</div>
+              <div class="text-sm text-gray-500">
+                Отримуйте оперативний імпульс про те, чи підключена сесія та чи потрібна авторизація.
+              </div>
+            </div>
+
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-lg font-semibold text-gray-700">
-                <i class="fa-solid fa-link text-indigo-500"></i>
-                Статус підключення
+              <div class="flex items-center gap-2 text-sm font-medium text-gray-600">
+                <span>Стан:</span>
+                <span id="statusText" class="font-semibold text-gray-800">Оберіть сесію…</span>
               </div>
               <button
                 id="refreshStatusBtn"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
               >
-                Оновити
+                <i class="fas fa-sync-alt"></i>
+                <span>Оновити</span>
               </button>
             </div>
-            <div class="mt-4 space-y-3 text-sm text-gray-600">
-              <p>
-                Стан:
-                <span id="statusText" class="font-semibold text-gray-800">Оберіть сесію...</span>
-              </p>
-              <p id="errorText" class="text-red-600 hidden"></p>
-            </div>
+
+            <p id="errorText" class="text-red-600 hidden text-sm"></p>
           </article>
 
-          <article class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div class="flex items-center gap-2 text-lg font-semibold text-gray-700">
-              <i class="fa-solid fa-qrcode text-gray-500"></i>
-              QR авторизації
+          <article class="bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-4">
+            <div class="space-y-1">
+              <div class="text-lg font-semibold text-gray-900">QR авторизації</div>
+              <div class="text-sm text-gray-500">
+                Якщо сесія вимагатиме нової авторизації — QR-код зʼявиться тут, готовий до сканування.
+              </div>
             </div>
             <p id="qrHint" class="text-sm text-gray-600">
-              Запустіть сесію. Якщо потрібна авторизація, QR-код зʼявиться тут.
+              Запустіть сесію, щоб перевірити статус. QR тут зʼявиться лише в разі потреби.
             </p>
             <img
               id="qrImage"
               alt="QR для входу"
-              class="mt-2 border border-gray-200 rounded-2xl w-full max-w-xs hidden"
+              class="mt-2 border border-gray-200 rounded-lg w-full max-w-xs hidden"
             />
           </article>
         </section>
 
         <section class="grid lg:grid-cols-3 gap-4">
-          <article class="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-lg font-semibold text-gray-700">
-                <i class="fa-solid fa-comments text-indigo-500"></i>
-                Чати для сканування
+          <article class="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-4">
+            <div class="space-y-1">
+              <div class="text-lg font-semibold text-gray-900">Чати для сканування</div>
+              <div class="text-sm text-gray-500">
+                Обирайте джерела, з яких буде збиратися інформація, і оновлюйте список у будь-який момент.
               </div>
+            </div>
+            <div class="flex justify-end">
               <button
                 id="refreshChatsBtn"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
               >
-                Оновити чати
+                <i class="fas fa-sync-alt"></i>
+                <span>Оновити чати</span>
               </button>
             </div>
             <div
               id="chatList"
-              class="border border-gray-200 rounded-2xl p-3 h-80 overflow-auto text-sm text-gray-600 space-y-2"
+              class="border border-gray-200 rounded-lg p-3 h-80 overflow-auto text-sm text-gray-600 space-y-2 bg-white"
             >
-              <p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>
+              <p class="text-gray-500">Список чатів з'явиться після готовності сесії.</p>
             </div>
           </article>
 
-          <article class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div class="flex items-center gap-2 text-lg font-semibold text-gray-700">
-              <i class="fa-solid fa-filter text-gray-500"></i>
-              Правила фільтрації
+          <article class="bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-4">
+            <div class="space-y-1">
+              <div class="text-lg font-semibold text-gray-900">Правила фільтрації</div>
+              <div class="text-sm text-gray-500">
+                Встановіть кінцеву групу та ключові слова, щоб автоматично пропускати релевантні повідомлення.
+              </div>
             </div>
-            <label class="text-sm font-semibold text-gray-600">
-              Кінцева група
+            <label class="text-sm font-semibold text-gray-600 space-y-2">
+              <span>Кінцева група</span>
               <select
                 id="destinationSelect"
-                class="mt-2 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                class="mt-2 w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
                 <option value="">Оберіть групу</option>
               </select>
@@ -176,49 +198,48 @@
                   id="keywordInput"
                   type="text"
                   placeholder="Напр. акція"
-                  class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  class="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
                 <button
                   id="addKeywordBtn"
-                  class="px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                  class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
                 >
-                  Додати
+                  <i class="fas fa-plus"></i>
+                  <span>Додати</span>
                 </button>
               </div>
-              <div
-                id="keywordList"
-                class="mt-3 flex flex-wrap gap-2 text-gray-600 text-sm"
-              >
+              <div id="keywordList" class="mt-3 flex flex-wrap gap-2 text-gray-600 text-sm">
                 <p class="text-gray-500">Ключові слова ще не додані.</p>
               </div>
             </div>
             <button
               id="saveSettingsBtn"
-              class="w-full px-4 py-2 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center justify-center gap-2"
             >
-              Зберегти налаштування
+              <i class="fas fa-sync-alt"></i>
+              <span>Зберегти налаштування</span>
             </button>
             <p id="settingsInfo" class="text-sm text-gray-600"></p>
           </article>
         </section>
 
-        <section class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-lg font-semibold text-gray-700">
-              <i class="fa-solid fa-list text-indigo-500"></i>
-              Журнал подій
+        <section class="bg-white border border-gray-200 rounded-lg shadow-md p-6 space-y-4">
+          <div class="space-y-1">
+            <div class="text-lg font-semibold text-gray-900">Журнал подій</div>
+            <div class="text-sm text-gray-500">
+              Переглядайте останні записи про сесії, фільтрацію й авторизацію, аби завжди бути в курсі.
             </div>
+          </div>
+          <div class="flex justify-end">
             <button
               id="toggleLogsBtn"
-              class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50"
+              class="bg-gray-100 hover:bg-gray-200 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2"
             >
-              Сховати
+              <i class="fas fa-list"></i>
+              <span>Сховати</span>
             </button>
           </div>
-          <div
-            id="logsContainer"
-            class="border border-gray-200 rounded-2xl p-4 space-y-2"
-          >
+          <div id="logsContainer" class="border border-gray-200 rounded-lg p-4 space-y-2 bg-white">
             <div id="logList" class="text-sm text-gray-600 h-64 overflow-auto space-y-2">
               <p class="text-gray-500">Події зʼявляться після запуску сесії.</p>
             </div>
