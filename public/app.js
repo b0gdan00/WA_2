@@ -48,6 +48,10 @@ const state = {
   }
 };
 
+let autoSaveTimer = null;
+let autoSaveInFlight = false;
+let autoSavePending = false;
+
 function escapeHtml(input) {
   return String(input)
     .replaceAll('&', '&amp;')
@@ -260,18 +264,26 @@ function addKeywordFromInput() {
   }
 
   const keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
-  if (!keywords.includes(keyword)) {
+  const changed = !keywords.includes(keyword);
+  if (changed) {
     state.settings.keywords = [...keywords, keyword];
   }
 
   elements.keywordInput.value = '';
   renderKeywords();
+  if (changed) {
+    scheduleAutoSave();
+  }
 }
 
 function removeKeyword(keyword) {
   const keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
+  const changed = keywords.includes(keyword);
   state.settings.keywords = keywords.filter((item) => item !== keyword);
   renderKeywords();
+  if (changed) {
+    scheduleAutoSave();
+  }
 }
 
 function renderStatus() {
@@ -484,7 +496,36 @@ async function loadLogs() {
   }
 }
 
-async function saveSettings() {
+function scheduleAutoSave() {
+  if (!state.activeSessionId) {
+    return;
+  }
+
+  autoSavePending = true;
+
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+
+  autoSaveTimer = setTimeout(async () => {
+    if (autoSaveInFlight) {
+      return;
+    }
+
+    autoSaveInFlight = true;
+    try {
+      // Coalesce bursts of changes into minimal number of save calls.
+      while (autoSavePending) {
+        autoSavePending = false;
+        await saveSettings({ auto: true });
+      }
+    } finally {
+      autoSaveInFlight = false;
+    }
+  }, 600);
+}
+
+async function saveSettings(options = {}) {
   const payload = {
     sourceChatIds: selectedChatIdsFromUi(),
     destinationChatId: elements.destinationSelect.value,
@@ -492,6 +533,10 @@ async function saveSettings() {
   };
 
   try {
+    if (options.auto) {
+      elements.settingsInfo.textContent = 'Автозбереження...';
+    }
+
     state.settings = await apiSession('/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -500,11 +545,19 @@ async function saveSettings() {
 
     state.settings.keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
     renderSettings();
-    elements.settingsInfo.textContent = state.settings.enabled
-      ? 'Налаштування збережено. Моніторинг активний.'
-      : 'Налаштування збережено, але моніторинг ще неактивний.';
+    if (options.auto) {
+      elements.settingsInfo.textContent = state.settings.enabled
+        ? 'Автозбережено. Моніторинг активний.'
+        : 'Автозбережено, але моніторинг ще неактивний.';
+    } else {
+      elements.settingsInfo.textContent = state.settings.enabled
+        ? 'Налаштування збережено. Моніторинг активний.'
+        : 'Налаштування збережено, але моніторинг ще неактивний.';
+    }
   } catch (error) {
-    elements.settingsInfo.textContent = `Помилка збереження: ${error.message}`;
+    elements.settingsInfo.textContent = options.auto
+      ? `Помилка автозбереження: ${error.message}`
+      : `Помилка збереження: ${error.message}`;
   }
 }
 
@@ -591,7 +644,7 @@ elements.deleteSessionBtn.addEventListener('click', async () => {
 
 elements.refreshStatusBtn.addEventListener('click', loadStatus);
 elements.refreshChatsBtn.addEventListener('click', () => loadChats(true));
-elements.saveSettingsBtn.addEventListener('click', saveSettings);
+elements.saveSettingsBtn.addEventListener('click', () => saveSettings({ auto: false }));
 
 elements.toggleLogsBtn.addEventListener('click', () => {
   state.ui.showLogs = !state.ui.showLogs;
@@ -610,6 +663,15 @@ elements.keywordInput.addEventListener('keydown', (event) => {
 elements.destinationSelect.addEventListener('change', () => {
   state.settings.destinationChatId = elements.destinationSelect.value;
   renderChatList();
+  scheduleAutoSave();
+});
+
+elements.chatList.addEventListener('change', (event) => {
+  const target = event.target;
+  if (!target || !target.classList || !target.classList.contains('source-chat')) {
+    return;
+  }
+  scheduleAutoSave();
 });
 
 elements.keywordList.addEventListener('click', (event) => {
