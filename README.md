@@ -68,7 +68,7 @@ sudo apt-get install -y nodejs npm \
 ### 2) Клонувати проєкт і встановити залежності
 ```bash
 sudo mkdir -p /opt/wa_2
-sudo git clone <YOUR_REPO_URL> /opt/wa_2
+sudo git clone https://github.com/b0gdan00/WA_2.git /opt/wa_2
 cd /opt/wa_2
 npm ci
 ```
