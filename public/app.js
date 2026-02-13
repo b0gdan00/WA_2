@@ -161,8 +161,6 @@ function renderSessions() {
       const statusKey = (rt && rt.status) || 'stopped';
       const statusText = escapeHtml(sessionLabel(rt));
       const startDisabled = Boolean(rt && rt.status === 'running');
-      const stopDisabled = !(rt && rt.status === 'running');
-
       const statusBadgeClasses = badgeClassForStatus(statusKey);
       const statusSpinner =
         statusKey === 'starting'
@@ -174,6 +172,44 @@ function renderSessions() {
           <span>${statusText}</span>
         </span>
       `;
+      const isRunning = rt && rt.status === 'running';
+      const statusActions = isRunning
+        ? `
+            <button
+              type="button"
+              data-action="stop"
+              data-session-id="${escapeHtml(s.id)}"
+              class="bg-gray-200 hover:bg-gray-300 text-gray-900 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+              title="Зупинити"
+            >
+              <i class="fas fa-stop"></i>
+              <span>Зупинити</span>
+            </button>
+          `
+        : `
+            <button
+              type="button"
+              data-action="start"
+              data-session-id="${escapeHtml(s.id)}"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 focus:outline-none"
+              title="Запустити"
+            >
+              <i class="fas fa-play"></i>
+              <span>Запустити</span>
+            </button>
+          `;
+      const deleteButton = `
+        <button
+          type="button"
+          data-action="delete"
+          data-session-id="${escapeHtml(s.id)}"
+          class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-md text-sm font-medium flex items-center justify-center focus:outline-none"
+          title="Видалити сесію"
+        >
+          <i class="fas fa-trash"></i>
+          <span class="sr-only">Видалити</span>
+        </button>
+      `;
 
       return `
         <tr data-session-id="${escapeHtml(s.id)}" class="${rowClasses} cursor-pointer">
@@ -184,37 +220,8 @@ function renderSessions() {
           <td class="px-3 py-3 text-right text-sm text-gray-700">${statusCell}</td>
           <td class="px-3 py-3 text-right">
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                data-action="start"
-                data-session-id="${escapeHtml(s.id)}"
-                class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-                ${startDisabled ? 'disabled' : ''}
-              >
-                <i class="fas fa-play"></i>
-                <span>Запустити</span>
-              </button>
-              <button
-                type="button"
-                data-action="stop"
-                data-session-id="${escapeHtml(s.id)}"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-800 p-2 rounded-md text-sm font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none border border-gray-300"
-                ${stopDisabled ? 'disabled' : ''}
-                title="Зупинити"
-              >
-                <i class="fas fa-stop"></i>
-                <span class="sr-only">Зупинити</span>
-              </button>
-              <button
-                type="button"
-                data-action="delete"
-                data-session-id="${escapeHtml(s.id)}"
-                class="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-md text-sm font-medium flex items-center justify-center focus:outline-none border border-red-200"
-                title="Видалити сесію"
-              >
-                <i class="fas fa-trash"></i>
-                <span class="sr-only">Видалити сесію</span>
-              </button>
+              ${statusActions}
+              ${deleteButton}
             </div>
           </td>
         </tr>
