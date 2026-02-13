@@ -43,7 +43,7 @@ function ensureDir(dir) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
-
+// лалала
 actionInit();
 
 function actionInit() {
