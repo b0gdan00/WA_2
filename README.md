@@ -53,7 +53,7 @@ npm start
 - `manager-data/sessions.json`
 
 ## Linux (деплой на сервер) + systemd
-Приклад розгортання в `/opt/wa_2` і запуск як сервіс.
+Приклад розгортання в `/opt/wa_2` і запуск як сервіс (без створення окремого юзера).
 
 ### 1) Встановіть залежності
 Ubuntu/Debian приклад:
@@ -65,28 +65,22 @@ sudo apt-get install -y nodejs npm \
   libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 xdg-utils
 ```
 
-### 2) Створіть користувача
-```bash
-sudo useradd -r -s /usr/sbin/nologin wa || true
-```
-
-### 3) Розмістіть проєкт
+### 2) Клонувати проєкт і встановити залежності
 ```bash
 sudo mkdir -p /opt/wa_2
-sudo chown -R wa:wa /opt/wa_2
-# скопіюйте файли проєкту в /opt/wa_2
+sudo git clone <YOUR_REPO_URL> /opt/wa_2
 cd /opt/wa_2
-sudo -u wa npm ci
+npm ci
 ```
 
-### 4) Встановіть systemd unit
+### 3) Встановіть systemd unit
 ```bash
 sudo cp deploy/systemd/wa-monitor.service /etc/systemd/system/wa-monitor.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now wa-monitor
 ```
 
-### 5) Відкрити панель (сервер без GUI)
+### 4) Відкрити панель (сервер без GUI)
 Варіант A (рекомендовано): SSH tunnel
 ```bash
 ssh -L 3000:127.0.0.1:3000 user@your-server
@@ -95,8 +89,9 @@ ssh -L 3000:127.0.0.1:3000 user@your-server
 - `http://localhost:3000`
 
 Варіант B: відкрити порт у фаєрволі та заходити напряму (краще робити через HTTPS/Reverse proxy).
+У цьому випадку виставіть `HOST=0.0.0.0` у systemd unit (див. `deploy/systemd/wa-monitor.service`).
 
-### 6) Логи
+### 5) Логи
 Systemd:
 ```bash
 journalctl -u wa-monitor -f

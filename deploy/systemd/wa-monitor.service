@@ -10,10 +10,13 @@ ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=3
 Environment=PORT=3000
+Environment=HOST=127.0.0.1
 
-# Create a dedicated user and set correct ownership for /opt/wa_2
-User=wa
-Group=wa
+#
+# By default the service runs as root (systemd default).
+# If you want to run as a non-root user later, add:
+# User=wa
+# Group=wa
 
 [Install]
 WantedBy=multi-user.target
