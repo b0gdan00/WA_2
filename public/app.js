@@ -551,7 +551,7 @@ function renderChatList() {
         : '';
 
       return `
-        <label class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent ${isDestination ? 'opacity-60' : ''}">
+        <label class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent ${isDestination ? 'opacity-60' : ''} w-full">
           <input class="source-chat mt-1" type="checkbox" value="${escapeHtml(chat.id)}" ${checked} ${disabled} />
           <span class="flex-1">
             <span class="font-medium"><i class="fa-solid ${icon} mr-2 text-gray-500"></i>${escapeHtml(chat.name)}</span>
