@@ -103,3 +103,79 @@ journalctl -u wa-monitor -f
 ## Примітки
 - Не запускайте кілька копій сервера одночасно: це може залишати запущені headless Chromium процеси.
 - Якщо сесія не стартує і в логах є `The browser is already running ...`, потрібно зупинити попередні процеси сервера/воркера.
+
+## Корисні команди (Linux)
+Нижче команди, які найчастіше потрібні для адміністрування сервера.
+
+Оновити код з репозиторію і перезапустити сервіс:
+```bash
+cd /opt/wa_2
+sudo git pull
+npm ci
+sudo systemctl restart wa-monitor
+```
+- `git pull`: підтягнути останню версію коду
+- `npm ci`: перевстановити залежності строго по `package-lock.json`
+- `systemctl restart`: застосувати зміни
+
+Перевірити стан сервісу:
+```bash
+sudo systemctl status wa-monitor
+```
+- показує чи сервіс запущений, PID, останні повідомлення
+
+Подивитись логи сервісу (systemd):
+```bash
+journalctl -u wa-monitor -f
+```
+- live-лог менеджера/воркерів через systemd
+
+Подивитись шлях до unit-файла (де лежить сервіс):
+```bash
+systemctl show -p FragmentPath wa-monitor.service
+```
+
+Редагувати unit-файл (якщо міняєте PORT/HOST):
+```bash
+sudo nano /etc/systemd/system/wa-monitor.service
+sudo systemctl daemon-reload
+sudo systemctl restart wa-monitor
+```
+- `daemon-reload`: обов'язково після зміни unit-файла
+
+Перевірити, що порт слухається:
+```bash
+sudo ss -ltnp | grep 3030
+```
+- покаже процес, який слухає порт (PORT можна змінити у unit-файлі)
+
+SSH tunnel до панелі (рекомендовано, якщо сервіс слухає `HOST=127.0.0.1`):
+```bash
+ssh -L 3030:127.0.0.1:3030 user@<SERVER_IP>
+```
+- відкриває панель локально на ПК: `http://localhost:3030`
+
+Відкрити порт у UFW (якщо потрібен прямий доступ):
+```bash
+sudo ufw allow 3030/tcp
+sudo ufw status
+```
+- для прямого доступу виставіть в unit-файлі `HOST=0.0.0.0`
+
+Де лежать дані сесій:
+```bash
+ls -la /opt/wa_2/sessions
+```
+- кожна сесія має свої `data/`, `logs/`, `.wwebjs_auth/`
+
+Подивитись логи конкретної сесії:
+```bash
+tail -n 200 /opt/wa_2/sessions/<sessionId>/logs/runtime.log
+```
+
+Очистити дані конкретної сесії (УВАГА: зіб'ється авторизація і налаштування):
+```bash
+sudo systemctl stop wa-monitor
+sudo rm -rf /opt/wa_2/sessions/<sessionId>
+sudo systemctl start wa-monitor
+```
