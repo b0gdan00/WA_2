@@ -3,6 +3,6 @@
 .wwebjs_cache/
 npm-debug.log*
 logs/
-data/
+# data/
 sessions/
-
+manager-data/
