@@ -20,6 +20,7 @@ const SEND_CHUNK_DELAY_MS = Number(process.env.SEND_CHUNK_DELAY_MS || 250);
 const KEEPALIVE_INTERVAL_MS = Number(process.env.KEEPALIVE_INTERVAL_MS || 60_000);
 const RECONNECT_BASE_DELAY_MS = Number(process.env.RECONNECT_BASE_DELAY_MS || 5_000);
 const RECONNECT_MAX_DELAY_MS = Number(process.env.RECONNECT_MAX_DELAY_MS || 5 * 60_000);
+const CACHE_PRUNE_INTERVAL_MS = Number(process.env.CACHE_PRUNE_INTERVAL_MS || 5 * 60 * 1000); // 5m
 
 const LOG_DIR = path.join(SESSION_DIR, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'runtime.log');
@@ -56,6 +57,7 @@ let reconnectAttempt = 0;
 let initializeInFlight = false;
 let keepAliveTimer = null;
 let sendChain = Promise.resolve();
+let cachePruneTimer = null;
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -286,6 +288,38 @@ function splitTextIntoChunks(text, maxLen) {
   return chunks;
 }
 
+function pruneChromeCaches() {
+  const targets = [
+    path.join(SESSION_DIR, '.wwebjs_auth', 'Default', 'Cache'),
+    path.join(SESSION_DIR, '.wwebjs_auth', 'Default', 'Code Cache'),
+    path.join(SESSION_DIR, '.wwebjs_auth', 'Default', 'Service Worker', 'CacheStorage')
+  ];
+
+  let removed = 0;
+  for (const dir of targets) {
+    if (fs.existsSync(dir)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        removed += 1;
+      } catch (error) {
+        pushLog('error', `Не вдалося очистити кеш браузера ${dir}: ${error.message}`);
+      }
+    }
+  }
+
+  if (removed > 0) {
+    pushLog('system', `Очищено кеш Chromium (${removed} директорій).`);
+  }
+}
+
+function startCachePrune() {
+  pruneChromeCaches();
+  if (cachePruneTimer) {
+    clearInterval(cachePruneTimer);
+  }
+  cachePruneTimer = setInterval(pruneChromeCaches, CACHE_PRUNE_INTERVAL_MS);
+}
+
 async function sendMessageWithRetry(chatId, content, options) {
   const maxAttempts = 3;
   let lastError = null;
@@ -372,7 +406,13 @@ const client = new Client({
   }),
   puppeteer: {
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disk-cache-size=1',
+      '--media-cache-size=1',
+      '--disable-application-cache'
+    ]
   }
 });
 
@@ -516,6 +556,7 @@ client.on('ready', async () => {
   clearReconnectTimer();
   reconnectAttempt = 0;
   startKeepAlive();
+  startCachePrune();
   pushLog('system', 'WhatsApp клієнт готовий до роботи.');
 
   try {
@@ -734,6 +775,10 @@ async function shutdown(code) {
   if (keepAliveTimer) {
     clearInterval(keepAliveTimer);
     keepAliveTimer = null;
+  }
+  if (cachePruneTimer) {
+    clearInterval(cachePruneTimer);
+    cachePruneTimer = null;
   }
 
   try {
