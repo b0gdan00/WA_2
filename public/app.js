@@ -355,6 +355,22 @@ function removeKeyword(keyword) {
   }
 }
 
+function badgeClassForStatus(status) {
+  const map = {
+    starting: 'bg-indigo-100 text-indigo-700',
+    running: 'bg-emerald-100 text-emerald-700',
+    ready: 'bg-emerald-100 text-emerald-700',
+    authenticated: 'bg-amber-100 text-amber-700',
+    qr: 'bg-sky-100 text-sky-700',
+    auth_failure: 'bg-red-100 text-red-700',
+    disconnected: 'bg-rose-100 text-rose-700',
+    init_error: 'bg-red-100 text-red-700',
+    stopped: 'bg-gray-100 text-gray-600',
+    error: 'bg-rose-100 text-rose-700'
+  };
+  return map[status] || 'bg-gray-100 text-gray-600';
+}
+
 function renderStatus() {
   const current = state.status;
 
@@ -366,11 +382,17 @@ function renderStatus() {
   }
 
   const label = statusLabel(current.status);
-  if (current.status === 'starting') {
-    elements.statusText.innerHTML = `<i class="fas fa-spinner fa-spin text-indigo-500 mr-2"></i>${label}`;
-  } else {
-    elements.statusText.textContent = label;
-  }
+  const badgeClasses = badgeClassForStatus(current.status);
+  const spinner =
+    current.status === 'starting'
+      ? '<i class="fas fa-spinner fa-spin text-indigo-500"></i>'
+      : '';
+  elements.statusText.innerHTML = `
+    <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${badgeClasses}">
+      ${spinner}
+      <span>${label}</span>
+    </span>
+  `;
 
   if (current.lastError) {
     elements.statusAlert?.classList.remove('hidden');
@@ -528,15 +550,35 @@ async function clearSessionUi() {
 }
 
 async function loadStatus() {
+  if (!state.activeSessionId) {
+    state.status = null;
+    renderStatus();
+    return;
+  }
+
+  const session = state.sessions.find((s) => s.id === state.activeSessionId);
+  const runtime = session ? session.runtime || {} : {};
+
+  if (!runtime || (runtime.status && runtime.status !== 'running')) {
+    state.status = {
+      status: runtime.status || 'stopped',
+      lastError: runtime.lastError || null,
+      ready: false
+    };
+    renderStatus();
+    return;
+  }
+
   try {
     state.status = await apiSession('/status');
     renderStatus();
   } catch (error) {
-    state.status = null;
-    elements.statusText.textContent = 'Сесія не запущена';
-    elements.sessionInfo.textContent = 'Сесію не запущено або вона недоступна.';
-    elements.statusAlert?.classList.remove('hidden');
-    elements.errorText.textContent = `Помилка: ${error.message}`;
+    state.status = {
+      status: runtime.status || 'running',
+      lastError: error.message,
+      ready: false
+    };
+    renderStatus();
   }
 }
 
