@@ -6,6 +6,7 @@
   sessionInfo: document.getElementById('sessionInfo'),
 
   statusText: document.getElementById('statusText'),
+  statusAlert: document.getElementById('statusAlert'),
   errorText: document.getElementById('errorText'),
   qrImage: document.getElementById('qrImage'),
   qrHint: document.getElementById('qrHint'),
@@ -115,7 +116,7 @@ function sessionLabel(runtime) {
 
 function statusLabel(code) {
   const map = {
-    starting: 'Запуск',
+    starting: 'Запуск...',
     qr: 'Потрібна авторизація (QR)',
     authenticated: 'Авторизовано, очікується готовність',
     ready: 'Готово до роботи',
@@ -142,7 +143,7 @@ function renderSessions() {
   if (sessions.length === 0) {
     body.innerHTML = `
       <tr>
-        <td colspan="5" class="px-3 py-4 text-center text-sm text-gray-500">
+        <td colspan="3" class="px-3 py-4 text-center text-sm text-gray-500">
           Немає сесій. Створіть нову, щоб почати.
         </td>
       </tr>
@@ -156,11 +157,9 @@ function renderSessions() {
       const rt = s.runtime || {};
       const selected = s.id === state.activeSessionId;
       const rowClasses = `border-b border-gray-100 ${
-        selected ? 'bg-slate-50 shadow-inner' : 'bg-white'
-      } hover:bg-gray-50 transition-colors duration-150`;
-      const status = escapeHtml(sessionLabel(rt));
-      const pid = rt && rt.pid ? escapeHtml(String(rt.pid)) : '-';
-      const errorText = rt && rt.lastError ? escapeHtml(rt.lastError) : '—';
+        selected ? 'bg-blue-50 shadow-inner' : 'bg-white'
+      } transition-colors duration-150`;
+      const statusText = escapeHtml(sessionLabel(rt));
       const startDisabled = Boolean(rt && rt.status === 'running');
       const stopDisabled = !(rt && rt.status === 'running');
 
@@ -170,11 +169,9 @@ function renderSessions() {
             <div class="font-medium text-gray-800">${escapeHtml(s.name || s.id)}</div>
             <div class="text-xs text-gray-500">${escapeHtml(s.id)}</div>
           </td>
-          <td class="px-3 py-3 text-right text-sm text-gray-700">${status}</td>
-          <td class="px-3 py-3 text-right text-sm text-gray-500">${pid}</td>
-          <td class="px-3 py-3 text-right text-sm text-gray-500">${errorText}</td>
+          <td class="px-3 py-3 text-right text-sm text-gray-700">${statusText}</td>
           <td class="px-3 py-3 text-right">
-            <div class="flex flex-col items-end gap-2">
+            <div class="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 data-action="start"
@@ -222,11 +219,12 @@ function updateSessionInfoText() {
     return;
   }
 
-  const rt = s.runtime || null;
-  state.sessionRuntime = rt;
-  const pid = rt && rt.pid ? `pid=${rt.pid}` : 'pid=-';
-  const err = rt && rt.lastError ? `, помилка: ${rt.lastError}` : '';
-  elements.sessionInfo.textContent = `Сесія: ${s.id}, стан: ${sessionLabel(rt)} (${pid})${err}`;
+  const runtime = state.status || s.runtime || null;
+  state.sessionRuntime = runtime;
+  const pid = runtime && runtime.pid ? `pid=${runtime.pid}` : 'pid=-';
+  const err = runtime && runtime.lastError ? `, помилка: ${runtime.lastError}` : '';
+  const statusLabelText = runtime ? sessionLabel(runtime) : 'Невідомо';
+  elements.sessionInfo.textContent = `Сесія: ${s.id}, стан: ${statusLabelText} (${pid})${err}`;
 }
 
 async function loadSessions() {
@@ -360,16 +358,23 @@ function renderStatus() {
 
   if (!current) {
     elements.statusText.textContent = 'Немає даних';
+    elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
+    elements.statusAlert?.classList.add('hidden');
     return;
   }
 
-  elements.statusText.textContent = statusLabel(current.status);
+  const label = statusLabel(current.status);
+  if (current.status === 'starting') {
+    elements.statusText.innerHTML = `<i class="fas fa-spinner fa-spin text-indigo-500 mr-2"></i>${label}`;
+  } else {
+    elements.statusText.textContent = label;
+  }
 
   if (current.lastError) {
-    elements.errorText.classList.remove('hidden');
+    elements.statusAlert?.classList.remove('hidden');
     elements.errorText.textContent = `Помилка: ${current.lastError}`;
   } else {
-    elements.errorText.classList.add('hidden');
+    elements.statusAlert?.classList.add('hidden');
     elements.errorText.textContent = '';
   }
 
@@ -384,6 +389,7 @@ function renderStatus() {
       ? 'Авторизація завершена.'
       : 'QR зʼявиться автоматично, коли він буде потрібен.';
   }
+  updateSessionInfoText();
 }
 
 function renderDestinationOptions() {
@@ -480,6 +486,10 @@ function renderSettings() {
   }
 }
 
+function buildAlert(message) {
+  return `<div class="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-sm">${message}</div>`;
+}
+
 function renderLogs(logs) {
   if (!Array.isArray(logs) || logs.length === 0) {
     elements.logList.innerHTML = '<p class="text-gray-500">Події поки відсутні.</p>';
@@ -504,10 +514,11 @@ async function clearSessionUi() {
   state.settings = { sourceChatIds: [], destinationChatId: '', keywords: [], enabled: false };
 
   elements.statusText.textContent = 'Сесію зупинено або не обрано.';
-  elements.errorText.classList.add('hidden');
+  elements.statusAlert?.classList.add('hidden');
   elements.qrImage.classList.add('hidden');
   elements.qrImage.removeAttribute('src');
   elements.qrHint.textContent = 'Запустіть сесію. Якщо потрібна авторизація, QR зʼявиться тут.';
+  elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
   elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>';
   elements.destinationSelect.innerHTML = '<option value="">Оберіть групу</option>';
   elements.keywordList.innerHTML = '<p class="text-gray-500">Ключові слова ще не додані.</p>';
@@ -521,8 +532,9 @@ async function loadStatus() {
   } catch (error) {
     state.status = null;
     elements.statusText.textContent = 'Сесія не запущена';
-    elements.errorText.classList.remove('hidden');
-    elements.errorText.textContent = error.message;
+    elements.sessionInfo.textContent = 'Сесію не запущено або вона недоступна.';
+    elements.statusAlert?.classList.remove('hidden');
+    elements.errorText.textContent = `Помилка: ${error.message}`;
   }
 }
 
@@ -548,7 +560,7 @@ async function loadChats(forceRefresh = false) {
     state.chats = payload.chats || [];
     renderSettings();
   } catch (error) {
-    elements.chatList.innerHTML = `<p class="text-red-600">Не вдалося отримати чати: ${escapeHtml(error.message)}</p>`;
+    elements.chatList.innerHTML = buildAlert(`Не вдалося отримати чати: ${escapeHtml(error.message)}`);
   }
 }
 
@@ -561,7 +573,7 @@ async function loadLogs() {
     const payload = await apiSession('/logs');
     renderLogs(payload.logs);
   } catch (error) {
-    elements.logList.innerHTML = `<p class="text-red-600">Помилка журналу: ${escapeHtml(error.message)}</p>`;
+    elements.logList.innerHTML = buildAlert(`Помилка журналу: ${escapeHtml(error.message)}`);
   }
 }
 
