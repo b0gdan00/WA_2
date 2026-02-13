@@ -33,7 +33,10 @@ const runtime = {
   status: 'starting',
   qr: null,
   lastError: null,
-  logs: []
+  logs: [],
+  startedAt: new Date().toISOString(),
+  readySince: null,
+  lastReadyEndedAt: null
 };
 
 let cachedChats = [];
@@ -94,6 +97,13 @@ function pushLog(type, text) {
       console.error(`Log write error: ${error.message}`);
     }
   });
+}
+
+function markNotReady() {
+  if (runtime.readySince) {
+    runtime.lastReadyEndedAt = new Date().toISOString();
+  }
+  runtime.readySince = null;
 }
 
 function normalizeKeywords(rawKeywords) {
@@ -415,6 +425,7 @@ function scheduleReconnect(trigger, details) {
     return;
   }
 
+  markNotReady();
   reconnectAttempt += 1;
   if (reconnectAttempt >= 12 && process.send) {
     pushLog('error', 'Забагато невдалих перепідключень. Перезапуск воркера для чистого відновлення.');
@@ -523,6 +534,9 @@ client.on('ready', async () => {
   runtime.status = 'ready';
   runtime.lastError = null;
   runtime.qr = null;
+  if (!runtime.readySince) {
+    runtime.readySince = new Date().toISOString();
+  }
   clearReconnectTimer();
   reconnectAttempt = 0;
   startKeepAlive();
@@ -557,6 +571,7 @@ client.on('ready', async () => {
 });
 
 client.on('auth_failure', (message) => {
+  markNotReady();
   runtime.status = 'auth_failure';
   runtime.lastError = message || 'Помилка авторизації.';
   pushLog('error', `Помилка авторизації: ${runtime.lastError}`);
@@ -564,6 +579,7 @@ client.on('auth_failure', (message) => {
 });
 
 client.on('disconnected', (reason) => {
+  markNotReady();
   runtime.status = 'disconnected';
   runtime.qr = null;
   pushLog('system', `Клієнт відключено: ${reason || 'невідома причина'}.`);
@@ -658,7 +674,10 @@ app.get('/api/status', (_, res) => {
     ready: runtime.status === 'ready',
     hasQr: Boolean(runtime.qr),
     qr: runtime.qr,
-    lastError: runtime.lastError
+    lastError: runtime.lastError,
+    startedAt: runtime.startedAt,
+    readySince: runtime.readySince,
+    lastReadyEndedAt: runtime.lastReadyEndedAt
   });
 });
 
@@ -734,6 +753,7 @@ async function shutdown(code) {
   shuttingDown = true;
 
   pushLog('system', 'Зупинка воркера...');
+  markNotReady();
   clearReconnectTimer();
   if (keepAliveTimer) {
     clearInterval(keepAliveTimer);
@@ -762,11 +782,13 @@ process.on('SIGINT', () => shutdown(0));
 process.on('unhandledRejection', (reason) => {
   const msg = reason && reason.message ? reason.message : String(reason || 'unknown');
   pushLog('error', `unhandledRejection: ${msg}`);
+  markNotReady();
   scheduleReconnect('unhandledRejection', msg);
 });
 
 process.on('uncaughtException', (error) => {
   pushLog('error', `uncaughtException: ${error?.message || String(error)}`);
+  markNotReady();
   scheduleReconnect('uncaughtException', error?.message || '');
 });
 
@@ -782,6 +804,7 @@ httpServer = app.listen(PORT, HOST, () => {
 });
 
 client.initialize().catch((error) => {
+  markNotReady();
   runtime.status = 'init_error';
   runtime.lastError = error.message;
   pushLog('error', `Помилка ініціалізації клієнта: ${error.message}`);
