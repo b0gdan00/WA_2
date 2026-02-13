@@ -45,6 +45,14 @@ const state = {
   }
 };
 
+const keywordPlaceholderClasses = ['items-center', 'justify-center', 'text-center', 'text-gray-500', 'italic'];
+
+function setKeywordPlaceholderMode(active) {
+  for (const cls of keywordPlaceholderClasses) {
+    elements.keywordList.classList.toggle(cls, active);
+  }
+}
+
 let autoSaveTimer = null;
 let autoSaveInFlight = false;
 let autoSavePending = false;
@@ -500,11 +508,8 @@ function renderKeywords() {
   const keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
 
   if (keywords.length === 0) {
-    elements.keywordList.innerHTML = `
-      <p class="mx-auto rounded-xl border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500 italic">
-        Ключові слова ще не додані.
-      </p>
-    `;
+    setKeywordPlaceholderMode(true);
+    elements.keywordList.innerHTML = 'Ключові слова ще не додані.';
     return;
   }
 
@@ -521,6 +526,7 @@ function renderKeywords() {
     )
     .join('');
 
+  setKeywordPlaceholderMode(false);
   elements.keywordList.innerHTML = html;
 }
 
