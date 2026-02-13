@@ -10,6 +10,7 @@
   errorText: document.getElementById('errorText'),
   qrImage: document.getElementById('qrImage'),
   qrHint: document.getElementById('qrHint'),
+  qrHintText: document.getElementById('qrHintText'),
 
   chatList: document.getElementById('chatList'),
   refreshChatsBtn: document.getElementById('refreshChatsBtn'),
@@ -445,13 +446,17 @@ function renderStatus() {
   if (current.hasQr && current.qr) {
     elements.qrImage.classList.remove('hidden');
     elements.qrImage.src = current.qr;
-    elements.qrHint.textContent = 'Скануйте цей QR-код у мобільному WhatsApp.';
+    if (elements.qrHintText) {
+      elements.qrHintText.textContent = 'Скануйте цей QR-код у мобільному WhatsApp.';
+    }
   } else {
     elements.qrImage.classList.add('hidden');
     elements.qrImage.removeAttribute('src');
-    elements.qrHint.textContent = current.ready
-      ? 'Авторизація завершена.'
-      : 'QR зʼявиться автоматично, коли він буде потрібен.';
+    if (elements.qrHintText) {
+      elements.qrHintText.textContent = current.ready
+        ? 'Авторизація завершена.'
+        : 'QR зʼявиться автоматично, коли він буде потрібен.';
+    }
   }
   updateSessionInfoText();
 }
@@ -584,7 +589,9 @@ async function clearSessionUi() {
   elements.statusAlert?.classList.add('hidden');
   elements.qrImage.classList.add('hidden');
   elements.qrImage.removeAttribute('src');
-  elements.qrHint.textContent = 'Запустіть сесію. Якщо потрібна авторизація, QR зʼявиться тут.';
+  if (elements.qrHintText) {
+    elements.qrHintText.textContent = 'Запустіть сесію. Якщо потрібна авторизація, QR зʼявиться тут.';
+  }
   elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
   elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>';
   elements.destinationSelect.innerHTML = '<option value="">Оберіть групу</option>';

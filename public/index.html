@@ -145,17 +145,19 @@
                 Якщо сесія вимагатиме нової авторизації — QR-код зʼявиться тут, готовий до сканування.
               </div>
             </div>
-            <p
+            <div
               id="qrHint"
-              class="mx-auto rounded-xl border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500"
+              class="mx-auto flex flex-col items-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500"
             >
-              Запустіть сесію, щоб перевірити статус. QR тут зʼявиться лише в разі потреби.
-            </p>
-            <img
-              id="qrImage"
-              alt="QR для входу"
-              class="mt-2 border border-gray-200 rounded-lg w-full max-w-xs hidden"
+              <span id="qrHintText" class="block">
+                Запустіть сесію, щоб перевірити статус. QR тут зʼявиться лише в разі потреби.
+              </span>
+              <img
+                id="qrImage"
+                alt="QR для входу"
+              class="w-full max-w-xs border border-gray-200 rounded-lg hidden mx-auto"
             />
+          </div>
           </article>
         </section>
 
