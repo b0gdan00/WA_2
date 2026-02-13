@@ -359,6 +359,11 @@ app.get('/api/sessions', (_, res) => {
 });
 
 app.post('/api/sessions', (req, res) => {
+  const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 3);
+  if (registry.sessions.length >= MAX_SESSIONS) {
+    return res.status(400).json({ error: `Дозволено не більше ${MAX_SESSIONS} сесій.` });
+  }
+
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const id = createId();
 

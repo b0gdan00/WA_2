@@ -3,6 +3,7 @@
   sessionsTableBody: document.getElementById('sessionsTableBody'),
   newSessionName: document.getElementById('newSessionName'),
   createSessionBtn: document.getElementById('createSessionBtn'),
+  createSessionNote: document.getElementById('createSessionNote'),
   sessionInfo: document.getElementById('sessionInfo'),
 
   statusText: document.getElementById('statusText'),
@@ -32,6 +33,7 @@ const state = {
   sessions: [],
   activeSessionId: '',
   sessionRuntime: null,
+  maxSessions: 3,
 
   status: null,
   chats: [],
@@ -172,6 +174,7 @@ function renderSessions() {
   }
 
   const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+  const limitReached = sessions.length >= state.maxSessions;
 
   if (sessions.length === 0) {
     body.innerHTML = `
@@ -182,6 +185,13 @@ function renderSessions() {
       </tr>
     `;
     elements.sessionInfo.textContent = 'Створіть сесію, щоб почати.';
+    if (elements.createSessionBtn) {
+      elements.createSessionBtn.disabled = false;
+      elements.createSessionBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+    if (elements.createSessionNote) {
+      elements.createSessionNote.textContent = `Максимум ${state.maxSessions} сесії.`;
+    }
     return;
   }
 
@@ -265,6 +275,17 @@ function renderSessions() {
 
   body.innerHTML = rows;
   updateSessionInfoText();
+
+  if (elements.createSessionBtn) {
+    elements.createSessionBtn.disabled = limitReached;
+    elements.createSessionBtn.classList.toggle('opacity-60', limitReached);
+    elements.createSessionBtn.classList.toggle('cursor-not-allowed', limitReached);
+  }
+  if (elements.createSessionNote) {
+    elements.createSessionNote.textContent = limitReached
+      ? `Досягнуто ліміт ${state.maxSessions} сесій. Видаліть існуючу, щоб створити нову.`
+      : `Максимум ${state.maxSessions} сесії.`;
+  }
 }
 
 function updateSessionInfoText() {
