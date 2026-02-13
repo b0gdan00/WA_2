@@ -45,6 +45,14 @@ const state = {
   }
 };
 
+function setSettingsInfo(text) {
+  if (!elements.settingsInfo) {
+    return;
+  }
+  elements.settingsInfo.textContent = text || '';
+  elements.settingsInfo.classList.toggle('hidden', !text);
+}
+
 const keywordPlaceholderClasses = ['items-center', 'justify-center', 'text-center', 'text-gray-500', 'italic'];
 
 function setKeywordPlaceholderMode(active) {
@@ -537,10 +545,11 @@ function renderSettings() {
   renderKeywords();
 
   if (state.settings.enabled) {
-    elements.settingsInfo.textContent = 'Моніторинг увімкнений.';
+    setSettingsInfo('Моніторинг увімкнений.');
   } else {
-    elements.settingsInfo.textContent =
-      'Моніторинг вимкнений. Оберіть джерела, додайте ключові слова та вкажіть кінцеву групу.';
+    setSettingsInfo(
+      'Моніторинг вимкнений. Оберіть джерела, додайте ключові слова та вкажіть кінцеву групу.'
+    );
   }
 }
 
@@ -579,8 +588,8 @@ async function clearSessionUi() {
   elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
   elements.chatList.innerHTML = '<p class="text-gray-500">Список чатів буде доступний після готовності сесії.</p>';
   elements.destinationSelect.innerHTML = '<option value="">Оберіть групу</option>';
-  elements.keywordList.innerHTML = '<p class="text-gray-500">Ключові слова ще не додані.</p>';
-  elements.settingsInfo.textContent = '';
+  renderKeywords();
+  setSettingsInfo('');
 }
 
 async function loadStatus() {
@@ -622,7 +631,7 @@ async function loadSettings() {
     state.settings.keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
     renderSettings();
   } catch (error) {
-    elements.settingsInfo.textContent = `Не вдалося завантажити налаштування: ${error.message}`;
+    setSettingsInfo(`Не вдалося завантажити налаштування: ${error.message}`);
   }
 }
 
@@ -693,7 +702,7 @@ async function saveSettings(options = {}) {
 
   try {
     if (options.auto) {
-      elements.settingsInfo.textContent = 'Автозбереження...';
+      setSettingsInfo('Автозбереження...');
     }
 
     state.settings = await apiSession('/settings', {
@@ -704,19 +713,25 @@ async function saveSettings(options = {}) {
 
     state.settings.keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
     renderSettings();
-    if (options.auto) {
-      elements.settingsInfo.textContent = state.settings.enabled
-        ? 'Автозбережено. Моніторинг активний.'
-        : 'Автозбережено, але моніторинг ще неактивний.';
-    } else {
-      elements.settingsInfo.textContent = state.settings.enabled
-        ? 'Налаштування збережено. Моніторинг активний.'
-        : 'Налаштування збережено, але моніторинг ще неактивний.';
-    }
+      if (options.auto) {
+        setSettingsInfo(
+          state.settings.enabled
+            ? 'Автозбережено. Моніторинг активний.'
+            : 'Автозбережено, але моніторинг ще неактивний.'
+        );
+      } else {
+        setSettingsInfo(
+          state.settings.enabled
+            ? 'Налаштування збережено. Моніторинг активний.'
+            : 'Налаштування збережено, але моніторинг ще неактивний.'
+        );
+      }
   } catch (error) {
-    elements.settingsInfo.textContent = options.auto
-      ? `Помилка автозбереження: ${error.message}`
-      : `Помилка збереження: ${error.message}`;
+    setSettingsInfo(
+      options.auto
+        ? `Помилка автозбереження: ${error.message}`
+        : `Помилка збереження: ${error.message}`
+    );
   }
 }
 
