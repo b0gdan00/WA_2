@@ -132,9 +132,68 @@ maybeMigrateLegacySingleSession();
 
 function getRuntime(id) {
   if (!runtime.sessions.has(id)) {
-    runtime.sessions.set(id, { child: null, port: null, status: 'stopped', lastError: null });
+    runtime.sessions.set(id, {
+      child: null,
+      port: null,
+      status: 'stopped',
+      lastError: null,
+      desired: 'stopped', // 'running' | 'stopped'
+      restartAttempts: 0,
+      restartTimer: null
+    });
   }
   return runtime.sessions.get(id);
+}
+
+function restartDelayMs(attempt) {
+  const n = Math.max(1, Number(attempt) || 1);
+  const base = Number(process.env.WORKER_RESTART_BASE_DELAY_MS || 2_000);
+  const max = Number(process.env.WORKER_RESTART_MAX_DELAY_MS || 60_000);
+  const exp = Math.min(max, base * Math.pow(2, n - 1));
+  const jitter = Math.floor(Math.random() * 500);
+  return Math.min(max, exp + jitter);
+}
+
+function clearRestartTimer(r) {
+  if (r && r.restartTimer) {
+    clearTimeout(r.restartTimer);
+    r.restartTimer = null;
+  }
+}
+
+function scheduleWorkerRestart(id, reason) {
+  const r = getRuntime(id);
+  if (r.desired !== 'running') {
+    return;
+  }
+  if (r.child) {
+    return;
+  }
+  if (r.restartTimer) {
+    return;
+  }
+
+  r.restartAttempts += 1;
+  const delay = restartDelayMs(r.restartAttempts);
+  const why = reason ? ` (${reason})` : '';
+  pushManagerLog(`Session ${id} will restart in ${Math.round(delay / 1000)}s${why}.`);
+
+  r.status = 'starting';
+  r.restartTimer = setTimeout(async () => {
+    r.restartTimer = null;
+    if (r.desired !== 'running') {
+      return;
+    }
+
+    try {
+      await startWorker(id);
+      r.restartAttempts = 0;
+    } catch (error) {
+      r.lastError = `Auto-restart failed: ${error.message}`;
+      r.status = 'error';
+      scheduleWorkerRestart(id, error.message);
+    }
+  }, delay);
 }
 
 async function startWorker(id) {
@@ -144,6 +203,8 @@ async function startWorker(id) {
   }
 
   const r = getRuntime(id);
+  r.desired = 'running';
+  clearRestartTimer(r);
   if (r.child) {
     return;
   }
@@ -167,6 +228,20 @@ async function startWorker(id) {
 
   r.child = child;
 
+  child.on('exit', (code, signal) => {
+    const rt = getRuntime(id);
+    rt.child = null;
+    rt.port = null;
+    rt.status = 'stopped';
+    rt.lastError = code === 0 ? null : `Exited (code=${code}, signal=${signal || ''})`;
+    pushManagerLog(`Session ${id} stopped: ${rt.lastError || 'ok'}`);
+
+    // Auto-restart unless user requested a stop.
+    if (rt.desired === 'running') {
+      scheduleWorkerRestart(id, rt.lastError || 'ok');
+    }
+  });
+
   child.stdout.on('data', (buf) => {
     pushManagerLog(`[${id}] ${String(buf).trim()}`);
   });
@@ -177,6 +252,11 @@ async function startWorker(id) {
 
   const ready = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
       reject(new Error('Worker start timeout'));
     }, 30000);
 
@@ -204,19 +284,13 @@ async function startWorker(id) {
 
   r.port = ready;
   r.status = 'running';
-
-  child.on('exit', (code, signal) => {
-    const rt = getRuntime(id);
-    rt.child = null;
-    rt.port = null;
-    rt.status = 'stopped';
-    rt.lastError = code === 0 ? null : `Exited (code=${code}, signal=${signal || ''})`;
-    pushManagerLog(`Session ${id} stopped: ${rt.lastError || 'ok'}`);
-  });
+  r.restartAttempts = 0;
 }
 
 async function stopWorker(id) {
   const r = getRuntime(id);
+  r.desired = 'stopped';
+  clearRestartTimer(r);
   if (!r.child) {
     return;
   }

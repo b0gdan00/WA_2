@@ -10,6 +10,17 @@ const SESSION_DIR =
 const HOST = process.env.WORKER_HOST || '127.0.0.1';
 const PORT = Number(process.env.WORKER_PORT || 0);
 
+// WhatsApp has practical message/caption limits; sending bigger payloads may truncate.
+// Split long forwards into smaller chunks to ensure the whole text arrives.
+const MAX_TEXT_LENGTH = Number(process.env.MAX_TEXT_LENGTH || 3500);
+const MAX_CAPTION_LENGTH = Number(process.env.MAX_CAPTION_LENGTH || 900);
+const SEND_CHUNK_DELAY_MS = Number(process.env.SEND_CHUNK_DELAY_MS || 250);
+
+// Best-effort: keep the session alive and automatically recover from disconnects.
+const KEEPALIVE_INTERVAL_MS = Number(process.env.KEEPALIVE_INTERVAL_MS || 60_000);
+const RECONNECT_BASE_DELAY_MS = Number(process.env.RECONNECT_BASE_DELAY_MS || 5_000);
+const RECONNECT_MAX_DELAY_MS = Number(process.env.RECONNECT_MAX_DELAY_MS || 5 * 60_000);
+
 const LOG_DIR = path.join(SESSION_DIR, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'runtime.log');
 const DATA_DIR = path.join(SESSION_DIR, 'data');
@@ -37,6 +48,11 @@ const scanner = {
 const processedMessageIds = new Set();
 let httpServer = null;
 let shuttingDown = false;
+let reconnectTimer = null;
+let reconnectAttempt = 0;
+let initializeInFlight = false;
+let keepAliveTimer = null;
+let sendChain = Promise.resolve();
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -54,6 +70,10 @@ function actionInit() {
 
 function sanitizeLogText(text) {
   return String(text || '').replace(/\r?\n/g, ' ').trim();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function pushLog(type, text) {
@@ -211,6 +231,118 @@ function shortMessageText(text) {
   return compact.length > 120 ? `${compact.slice(0, 117)}...` : compact;
 }
 
+function splitTextIntoChunks(text, maxLen) {
+  const value = String(text ?? '');
+  const limit = Math.max(1, Number(maxLen) || 1);
+
+  if (!value) {
+    return [];
+  }
+
+  if (value.length <= limit) {
+    return [value];
+  }
+
+  const chunks = [];
+  let idx = 0;
+  const hardMaxChunks = 200; // Safety valve to avoid infinite spam on absurdly large inputs.
+
+  while (idx < value.length && chunks.length < hardMaxChunks) {
+    let end = Math.min(idx + limit, value.length);
+
+    // Try to split on a whitespace/newline near the end to keep words intact.
+    if (end < value.length) {
+      const slice = value.slice(idx, end);
+      const lastNl = slice.lastIndexOf('\n');
+      const lastSpace = slice.lastIndexOf(' ');
+      const breakAt = Math.max(lastNl, lastSpace);
+
+      // Only use the break if it is close to the end; otherwise we risk tiny chunks.
+      if (breakAt >= Math.max(0, slice.length - 200)) {
+        end = idx + breakAt + 1;
+      }
+    }
+
+    const part = value.slice(idx, end);
+    chunks.push(part);
+    idx = end;
+  }
+
+  if (idx < value.length) {
+    // Message is extremely large; include a final marker so it's obvious it was truncated by us.
+    chunks.push('[message too long: truncated]');
+  }
+
+  return chunks;
+}
+
+async function sendMessageWithRetry(chatId, content, options) {
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      if (options) {
+        await client.sendMessage(chatId, content, options);
+      } else {
+        await client.sendMessage(chatId, content);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      const waitMs = Math.min(2000 * attempt, 5000);
+      pushLog('error', `sendMessage failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError || new Error('sendMessage failed');
+}
+
+function enqueueSend(fn) {
+  sendChain = sendChain
+    .then(() => fn())
+    .catch((error) => {
+      // Keep the chain alive even if one send fails.
+      pushLog('error', `Send queue error: ${error.message}`);
+    });
+  return sendChain;
+}
+
+async function sendTextInChunks(chatId, text, maxLen) {
+  const chunks = splitTextIntoChunks(text, maxLen);
+  for (const chunk of chunks) {
+    if (!chunk) {
+      continue;
+    }
+    await sendMessageWithRetry(chatId, chunk);
+    if (SEND_CHUNK_DELAY_MS > 0) {
+      await sleep(SEND_CHUNK_DELAY_MS);
+    }
+  }
+}
+
+async function sendMediaWithCaptionAndText(chatId, media, fullText) {
+  const chunks = splitTextIntoChunks(fullText, MAX_CAPTION_LENGTH);
+  if (chunks.length === 0) {
+    await sendMessageWithRetry(chatId, media);
+    return;
+  }
+
+  const [caption, ...rest] = chunks;
+  await sendMessageWithRetry(chatId, media, { caption });
+
+  for (const chunk of rest) {
+    if (!chunk) {
+      continue;
+    }
+    await sendMessageWithRetry(chatId, chunk);
+    if (SEND_CHUNK_DELAY_MS > 0) {
+      await sleep(SEND_CHUNK_DELAY_MS);
+    }
+  }
+}
+
 function isDuplicateMessage(message) {
   const messageId =
     message && message.id && message.id._serialized ? message.id._serialized : '';
@@ -258,6 +390,114 @@ const client = new Client({
   }
 });
 
+function reconnectDelayMs(attempt) {
+  const n = Math.max(1, Number(attempt) || 1);
+  const base = RECONNECT_BASE_DELAY_MS;
+  const max = RECONNECT_MAX_DELAY_MS;
+  const exp = Math.min(max, base * Math.pow(2, n - 1));
+  const jitter = Math.floor(Math.random() * 500);
+  return Math.min(max, exp + jitter);
+}
+
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect(trigger, details) {
+  if (shuttingDown) {
+    return;
+  }
+
+  if (reconnectTimer || initializeInFlight) {
+    return;
+  }
+
+  reconnectAttempt += 1;
+  if (reconnectAttempt >= 12 && process.send) {
+    pushLog('error', 'Забагато невдалих перепідключень. Перезапуск воркера для чистого відновлення.');
+    // Let the manager process restart the worker with a clean Chromium instance.
+    process.exit(2);
+  }
+  const delay = reconnectDelayMs(reconnectAttempt);
+  runtime.status = 'reconnecting';
+  runtime.lastError = null;
+  runtime.qr = null;
+
+  const reason = details ? ` (${details})` : '';
+  pushLog(
+    'system',
+    `Перепідключення заплановано через ${Math.round(delay / 1000)}с: ${trigger}${reason}.`
+  );
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void reinitializeClient(trigger);
+  }, delay);
+}
+
+async function reinitializeClient(trigger) {
+  if (shuttingDown) {
+    return;
+  }
+
+  if (initializeInFlight) {
+    return;
+  }
+  initializeInFlight = true;
+
+  runtime.status = 'reconnecting';
+  runtime.lastError = null;
+  runtime.qr = null;
+
+  pushLog('system', `Спроба перепідключення (${trigger}), спроба #${reconnectAttempt || 1}...`);
+
+  try {
+    try {
+      await client.destroy();
+    } catch (error) {
+      pushLog('error', `destroy() перед перепідключенням: ${error.message}`);
+    }
+
+    await client.initialize();
+    // If initialize() did not throw, the client will emit qr/auth/ready events.
+    reconnectAttempt = 0;
+  } catch (error) {
+    pushLog('error', `Перепідключення не вдалося: ${error.message}`);
+    scheduleReconnect('reconnect_failed', error.message);
+  } finally {
+    initializeInFlight = false;
+  }
+}
+
+function startKeepAlive() {
+  if (keepAliveTimer) {
+    return;
+  }
+
+  keepAliveTimer = setInterval(async () => {
+    if (shuttingDown) {
+      return;
+    }
+    if (runtime.status !== 'ready') {
+      return;
+    }
+
+    try {
+      // Lightweight ping. If it throws, schedule reconnect.
+      if (typeof client.getState !== 'function') {
+        return;
+      }
+      await client.getState();
+    } catch (error) {
+      pushLog('error', `Keepalive error: ${error.message}`);
+      scheduleReconnect('keepalive', error.message);
+    }
+  }, KEEPALIVE_INTERVAL_MS);
+}
+
 client.on('qr', async (qr) => {
   runtime.status = 'qr';
   runtime.lastError = null;
@@ -275,6 +515,7 @@ client.on('authenticated', () => {
   runtime.status = 'authenticated';
   runtime.lastError = null;
   runtime.qr = null;
+  clearReconnectTimer();
   pushLog('auth', 'Авторизація пройдена, чекаємо готовність клієнта.');
 });
 
@@ -282,6 +523,9 @@ client.on('ready', async () => {
   runtime.status = 'ready';
   runtime.lastError = null;
   runtime.qr = null;
+  clearReconnectTimer();
+  reconnectAttempt = 0;
+  startKeepAlive();
   pushLog('system', 'WhatsApp клієнт готовий до роботи.');
 
   try {
@@ -316,12 +560,14 @@ client.on('auth_failure', (message) => {
   runtime.status = 'auth_failure';
   runtime.lastError = message || 'Помилка авторизації.';
   pushLog('error', `Помилка авторизації: ${runtime.lastError}`);
+  scheduleReconnect('auth_failure', runtime.lastError);
 });
 
 client.on('disconnected', (reason) => {
   runtime.status = 'disconnected';
   runtime.qr = null;
   pushLog('system', `Клієнт відключено: ${reason || 'невідома причина'}.`);
+  scheduleReconnect('disconnected', reason || '');
 });
 
 async function processMessageForScan(message, eventName) {
@@ -365,6 +611,7 @@ async function processMessageForScan(message, eventName) {
 
   try {
     const prefix = `Переслано автоматично з ${chatNameById(sourceChatId)}\n\n`;
+    const fullText = prefix + body;
 
     if (message.hasMedia) {
       const media = await message.downloadMedia();
@@ -373,10 +620,13 @@ async function processMessageForScan(message, eventName) {
         return;
       }
 
-      const caption = prefix + shortMessageText(body);
-      await client.sendMessage(scanner.destinationChatId, media, { caption });
+      await enqueueSend(async () => {
+        await sendMediaWithCaptionAndText(scanner.destinationChatId, media, fullText);
+      });
     } else {
-      await client.sendMessage(scanner.destinationChatId, prefix + body);
+      await enqueueSend(async () => {
+        await sendTextInChunks(scanner.destinationChatId, fullText, MAX_TEXT_LENGTH);
+      });
     }
 
     pushLog(
@@ -484,6 +734,11 @@ async function shutdown(code) {
   shuttingDown = true;
 
   pushLog('system', 'Зупинка воркера...');
+  clearReconnectTimer();
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
 
   try {
     await client.destroy();
@@ -504,6 +759,17 @@ async function shutdown(code) {
 process.on('SIGTERM', () => shutdown(0));
 process.on('SIGINT', () => shutdown(0));
 
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.message ? reason.message : String(reason || 'unknown');
+  pushLog('error', `unhandledRejection: ${msg}`);
+  scheduleReconnect('unhandledRejection', msg);
+});
+
+process.on('uncaughtException', (error) => {
+  pushLog('error', `uncaughtException: ${error?.message || String(error)}`);
+  scheduleReconnect('uncaughtException', error?.message || '');
+});
+
 httpServer = app.listen(PORT, HOST, () => {
   const address = httpServer.address();
   const realPort = address && typeof address === 'object' ? address.port : PORT;
@@ -519,4 +785,5 @@ client.initialize().catch((error) => {
   runtime.status = 'init_error';
   runtime.lastError = error.message;
   pushLog('error', `Помилка ініціалізації клієнта: ${error.message}`);
+  scheduleReconnect('init_error', error.message);
 });

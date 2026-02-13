@@ -133,6 +133,7 @@ function sessionLabel(runtime) {
 function statusLabel(code) {
   const map = {
     starting: 'Запуск...',
+    reconnecting: 'Перепідключення...',
     qr: 'Потрібна авторизація (QR)',
     authenticated: 'Авторизовано, очікується готовність',
     ready: 'Готово до роботи',
@@ -402,6 +403,7 @@ function badgeClassForStatus(status) {
     running: 'bg-emerald-100 text-emerald-700',
     ready: 'bg-emerald-100 text-emerald-700',
     authenticated: 'bg-amber-100 text-amber-700',
+    reconnecting: 'bg-amber-100 text-amber-700',
     qr: 'bg-sky-100 text-sky-700',
     auth_failure: 'bg-red-100 text-red-700',
     disconnected: 'bg-rose-100 text-rose-700',
