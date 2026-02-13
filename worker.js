@@ -319,38 +319,14 @@ function enqueueSend(fn) {
   return sendChain;
 }
 
-async function sendTextInChunks(chatId, text, maxLen) {
-  const chunks = splitTextIntoChunks(text, maxLen);
-  for (const chunk of chunks) {
-    if (!chunk) {
-      continue;
-    }
-    await sendMessageWithRetry(chatId, chunk);
-    if (SEND_CHUNK_DELAY_MS > 0) {
-      await sleep(SEND_CHUNK_DELAY_MS);
-    }
-  }
+async function sendTextInChunks(chatId, text) {
+  // Requirement: send as a single message (no chunking).
+  await sendMessageWithRetry(chatId, text);
 }
 
 async function sendMediaWithCaptionAndText(chatId, media, fullText) {
-  const chunks = splitTextIntoChunks(fullText, MAX_CAPTION_LENGTH);
-  if (chunks.length === 0) {
-    await sendMessageWithRetry(chatId, media);
-    return;
-  }
-
-  const [caption, ...rest] = chunks;
-  await sendMessageWithRetry(chatId, media, { caption });
-
-  for (const chunk of rest) {
-    if (!chunk) {
-      continue;
-    }
-    await sendMessageWithRetry(chatId, chunk);
-    if (SEND_CHUNK_DELAY_MS > 0) {
-      await sleep(SEND_CHUNK_DELAY_MS);
-    }
-  }
+  // Send media once with the full caption; let WhatsApp handle any truncation.
+  await sendMessageWithRetry(chatId, media, { caption: fullText });
 }
 
 function isDuplicateMessage(message) {
