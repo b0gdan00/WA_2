@@ -368,7 +368,9 @@ app.get('/api/sessions/:id/chats', async (req, res) => {
 });
 
 app.listen(PORT, HOST, () => {
-  pushManagerLog(`Manager started: http://localhost:${PORT}`);
+  const bind = HOST || '0.0.0.0';
+  const urlHost = bind === '0.0.0.0' ? '<SERVER_IP>' : bind;
+  pushManagerLog(`Manager started: http://${urlHost}:${PORT} (bind=${bind})`);
 });
 
 process.on('SIGTERM', async () => {
