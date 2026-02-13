@@ -12,7 +12,6 @@
   qrHint: document.getElementById('qrHint'),
 
   chatList: document.getElementById('chatList'),
-  refreshStatusBtn: document.getElementById('refreshStatusBtn'),
   refreshChatsBtn: document.getElementById('refreshChatsBtn'),
 
   destinationSelect: document.getElementById('destinationSelect'),
@@ -157,7 +156,7 @@ function renderSessions() {
       const rt = s.runtime || {};
       const selected = s.id === state.activeSessionId;
       const rowClasses = `border-b border-gray-100 ${
-        selected ? 'bg-blue-50 shadow-inner' : 'bg-white'
+        selected ? 'bg-blue-50' : 'bg-white'
       } transition-colors duration-150`;
       const statusText = escapeHtml(sessionLabel(rt));
       const startDisabled = Boolean(rt && rt.status === 'running');
@@ -186,7 +185,7 @@ function renderSessions() {
                 type="button"
                 data-action="stop"
                 data-session-id="${escapeHtml(s.id)}"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-800 p-2 rounded-md text-sm font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-800 p-2 rounded-md text-sm font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none border border-gray-300"
                 ${stopDisabled ? 'disabled' : ''}
                 title="Зупинити"
               >
@@ -226,7 +225,12 @@ function updateSessionInfoText() {
   const pid = runtime && runtime.pid ? `pid=${runtime.pid}` : 'pid=-';
   const err = runtime && runtime.lastError ? `, помилка: ${runtime.lastError}` : '';
   const statusLabelText = runtime ? sessionLabel(runtime) : 'Невідомо';
-  elements.sessionInfo.textContent = `Сесія: ${s.id}, стан: ${statusLabelText} (${pid})${err}`;
+  const name = escapeHtml(s.name || s.id);
+  const sessionId = escapeHtml(s.id);
+  elements.sessionInfo.innerHTML = `
+    <span class="font-semibold text-gray-800 block">Назва: ${name}</span>
+    <span class="text-sm text-gray-600 block">Сесія: ${sessionId}, стан: ${statusLabelText} (${pid})${err}</span>
+  `;
 }
 
 async function loadSessions() {
@@ -476,18 +480,18 @@ function renderKeywords() {
   const keywords = Array.isArray(state.settings.keywords) ? state.settings.keywords : [];
 
   if (keywords.length === 0) {
-    elements.keywordList.innerHTML = '<p class="text-gray-500">Ключові слова ще не додані.</p>';
+    elements.keywordList.innerHTML = '<p class="text-gray-500 italic">Ключові слова ще не додані.</p>';
     return;
   }
 
   const html = keywords
     .map(
       (keyword) => `
-        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-300 text-sm">
+        <span
+          data-keyword="${escapeHtml(keyword)}"
+          class="inline-flex items-center px-3 py-1 rounded-full border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100"
+        >
           ${escapeHtml(keyword)}
-          <button type="button" class="remove-keyword text-gray-500 hover:text-red-600" data-keyword="${escapeHtml(keyword)}">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </span>
       `
     )
@@ -781,7 +785,6 @@ elements.createSessionBtn.addEventListener('click', async () => {
 
 // Main controls
 
-elements.refreshStatusBtn.addEventListener('click', loadStatus);
 elements.refreshChatsBtn.addEventListener('click', () => loadChats(true));
 elements.saveSettingsBtn.addEventListener('click', () => saveSettings({ auto: false }));
 
@@ -814,12 +817,12 @@ elements.chatList.addEventListener('change', (event) => {
 });
 
 elements.keywordList.addEventListener('click', (event) => {
-  const button = event.target.closest('.remove-keyword');
-  if (!button) {
+  const tag = event.target.closest('[data-keyword]');
+  if (!tag) {
     return;
   }
 
-  const keyword = button.getAttribute('data-keyword');
+  const keyword = tag.getAttribute('data-keyword');
   if (!keyword) {
     return;
   }
