@@ -11,6 +11,7 @@
   qrImage: document.getElementById('qrImage'),
   qrHint: document.getElementById('qrHint'),
   qrHintText: document.getElementById('qrHintText'),
+  uptimeInfo: document.getElementById('uptimeInfo'),
 
   chatList: document.getElementById('chatList'),
   refreshChatsBtn: document.getElementById('refreshChatsBtn'),
@@ -73,6 +74,21 @@ function escapeHtml(input) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return '-';
+  }
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const parts = [];
+  if (hours) parts.push(`${hours} год`);
+  if (minutes || hours) parts.push(`${minutes} хв`);
+  parts.push(`${secs} с`);
+  return parts.join(' ');
 }
 
 async function api(url, options) {
@@ -420,6 +436,7 @@ function renderStatus() {
   if (!current) {
     elements.statusText.textContent = 'Немає даних';
     elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
+    elements.uptimeInfo.textContent = '';
     elements.statusAlert?.classList.add('hidden');
     return;
   }
@@ -444,6 +461,15 @@ function renderStatus() {
     elements.statusAlert?.classList.add('hidden');
     elements.errorText.textContent = '';
   }
+
+  const readySince = current.readySince ? new Date(current.readySince) : null;
+  const lastReadyEndedAt = current.lastReadyEndedAt ? new Date(current.lastReadyEndedAt) : null;
+  const now = Date.now();
+  const uptimeSeconds =
+    current.ready && readySince ? Math.max(0, (now - readySince.getTime()) / 1000) : null;
+  const lastOnlineText = lastReadyEndedAt ? lastReadyEndedAt.toLocaleString('uk-UA') : '—';
+  const uptimeText = uptimeSeconds !== null ? formatDuration(uptimeSeconds) : '—';
+  elements.uptimeInfo.textContent = `Час роботи: ${uptimeText}. Останній онлайн: ${lastOnlineText}`;
 
   if (current.hasQr && current.qr) {
     elements.qrImage.classList.remove('hidden');
@@ -589,6 +615,7 @@ async function clearSessionUi() {
 
   elements.statusText.textContent = 'Сесію зупинено або не обрано.';
   elements.statusAlert?.classList.add('hidden');
+  elements.uptimeInfo.textContent = '';
   elements.qrImage.classList.add('hidden');
   elements.qrImage.removeAttribute('src');
   if (elements.qrHintText) {
