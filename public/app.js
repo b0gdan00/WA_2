@@ -158,9 +158,22 @@ function renderSessions() {
       const rowClasses = `border-b border-gray-100 ${
         selected ? 'bg-blue-50' : 'bg-white'
       } transition-colors duration-150`;
+      const statusKey = (rt && rt.status) || 'stopped';
       const statusText = escapeHtml(sessionLabel(rt));
       const startDisabled = Boolean(rt && rt.status === 'running');
       const stopDisabled = !(rt && rt.status === 'running');
+
+      const statusBadgeClasses = badgeClassForStatus(statusKey);
+      const statusSpinner =
+        statusKey === 'starting'
+          ? '<i class="fas fa-spinner fa-spin text-indigo-500"></i>'
+          : '';
+      const statusCell = `
+        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses}">
+          ${statusSpinner}
+          <span>${statusText}</span>
+        </span>
+      `;
 
       return `
         <tr data-session-id="${escapeHtml(s.id)}" class="${rowClasses} cursor-pointer">
@@ -168,7 +181,7 @@ function renderSessions() {
             <div class="font-medium text-gray-800">${escapeHtml(s.name || s.id)}</div>
             <div class="text-xs text-gray-500">${escapeHtml(s.id)}</div>
           </td>
-          <td class="px-3 py-3 text-right text-sm text-gray-700">${statusText}</td>
+          <td class="px-3 py-3 text-right text-sm text-gray-700">${statusCell}</td>
           <td class="px-3 py-3 text-right">
             <div class="flex flex-wrap items-center justify-end gap-2">
               <button
