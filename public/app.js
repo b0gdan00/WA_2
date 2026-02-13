@@ -1,11 +1,8 @@
 ﻿const elements = {
   refreshSessionsBtn: document.getElementById('refreshSessionsBtn'),
-  sessionSelect: document.getElementById('sessionSelect'),
+  sessionsTableBody: document.getElementById('sessionsTableBody'),
   newSessionName: document.getElementById('newSessionName'),
   createSessionBtn: document.getElementById('createSessionBtn'),
-  startSessionBtn: document.getElementById('startSessionBtn'),
-  stopSessionBtn: document.getElementById('stopSessionBtn'),
-  deleteSessionBtn: document.getElementById('deleteSessionBtn'),
   sessionInfo: document.getElementById('sessionInfo'),
 
   statusText: document.getElementById('statusText'),
@@ -135,39 +132,101 @@ function activeSession() {
 }
 
 function renderSessions() {
-  if (!Array.isArray(state.sessions) || state.sessions.length === 0) {
-    elements.sessionSelect.innerHTML = '<option value="">Немає сесій</option>';
+  const body = elements.sessionsTableBody;
+  if (!body) {
+    return;
+  }
+
+  const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+
+  if (sessions.length === 0) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="5" class="px-3 py-4 text-center text-sm text-gray-500">
+          Немає сесій. Створіть нову, щоб почати.
+        </td>
+      </tr>
+    `;
     elements.sessionInfo.textContent = 'Створіть сесію, щоб почати.';
     return;
   }
 
-  const options = state.sessions.map((s) => {
-    const rt = s.runtime || {};
-    const selected = s.id === state.activeSessionId ? 'selected' : '';
-    const suffix = rt && rt.status ? ` (${sessionLabel(rt)})` : '';
-    return `<option value="${escapeHtml(s.id)}" ${selected}>${escapeHtml(s.name || s.id)}${escapeHtml(
-      suffix
-    )}</option>`;
-  });
+  const rows = sessions
+    .map((s) => {
+      const rt = s.runtime || {};
+      const selected = s.id === state.activeSessionId;
+      const rowClasses = `border-b border-gray-100 ${
+        selected ? 'bg-slate-50 shadow-inner' : 'bg-white'
+      } hover:bg-gray-50 transition-colors duration-150`;
+      const status = escapeHtml(sessionLabel(rt));
+      const pid = rt && rt.pid ? escapeHtml(String(rt.pid)) : '-';
+      const errorText = rt && rt.lastError ? escapeHtml(rt.lastError) : '—';
+      const startDisabled = Boolean(rt && rt.status === 'running');
+      const stopDisabled = !(rt && rt.status === 'running');
 
-  elements.sessionSelect.innerHTML = options.join('');
+      return `
+        <tr data-session-id="${escapeHtml(s.id)}" class="${rowClasses} cursor-pointer">
+          <td class="px-3 py-3 text-left">
+            <div class="font-medium text-gray-800">${escapeHtml(s.name || s.id)}</div>
+            <div class="text-xs text-gray-500">${escapeHtml(s.id)}</div>
+          </td>
+          <td class="px-3 py-3 text-right text-sm text-gray-700">${status}</td>
+          <td class="px-3 py-3 text-right text-sm text-gray-500">${pid}</td>
+          <td class="px-3 py-3 text-right text-sm text-gray-500">${errorText}</td>
+          <td class="px-3 py-3 text-right">
+            <div class="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                data-action="start"
+                data-session-id="${escapeHtml(s.id)}"
+                class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+                ${startDisabled ? 'disabled' : ''}
+              >
+                <i class="fas fa-play"></i>
+                <span>Запустити</span>
+              </button>
+              <button
+                type="button"
+                data-action="stop"
+                data-session-id="${escapeHtml(s.id)}"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+                ${stopDisabled ? 'disabled' : ''}
+              >
+                <i class="fas fa-stop"></i>
+                <span>Зупинити</span>
+              </button>
+              <button
+                type="button"
+                data-action="delete"
+                data-session-id="${escapeHtml(s.id)}"
+                class="bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded-md text-sm font-medium flex items-center gap-2 focus:outline-none border border-red-200"
+              >
+                <i class="fas fa-trash"></i>
+                <span>Видалити сесію</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
 
+  body.innerHTML = rows;
+  updateSessionInfoText();
+}
+
+function updateSessionInfoText() {
   const s = activeSession();
   if (!s) {
-    elements.sessionInfo.textContent = 'Оберіть сесію.';
+    elements.sessionInfo.textContent = 'Оберіть сесію або створіть нову.';
     return;
   }
 
   const rt = s.runtime || null;
   state.sessionRuntime = rt;
-
   const pid = rt && rt.pid ? `pid=${rt.pid}` : 'pid=-';
   const err = rt && rt.lastError ? `, помилка: ${rt.lastError}` : '';
   elements.sessionInfo.textContent = `Сесія: ${s.id}, стан: ${sessionLabel(rt)} (${pid})${err}`;
-
-  const running = rt && rt.status === 'running';
-  elements.startSessionBtn.disabled = running;
-  elements.stopSessionBtn.disabled = !running;
 }
 
 async function loadSessions() {
@@ -205,26 +264,30 @@ async function createSession() {
   }
 }
 
-async function startSession() {
-  if (!state.activeSessionId) {
+async function startSession(id = state.activeSessionId) {
+  if (!id) {
     return;
   }
-  await api(`/api/sessions/${state.activeSessionId}/start`, { method: 'POST' });
+
+  saveActiveSession(id);
+  await api(`/api/sessions/${id}/start`, { method: 'POST' });
   await loadSessions();
   await loadStatus();
 }
 
-async function stopSession() {
-  if (!state.activeSessionId) {
+async function stopSession(id = state.activeSessionId) {
+  if (!id) {
     return;
   }
-  await api(`/api/sessions/${state.activeSessionId}/stop`, { method: 'POST' });
+
+  saveActiveSession(id);
+  await api(`/api/sessions/${id}/stop`, { method: 'POST' });
   await loadSessions();
   await clearSessionUi();
 }
 
-async function deleteSession() {
-  if (!state.activeSessionId) {
+async function deleteSession(id = state.activeSessionId) {
+  if (!id) {
     return;
   }
 
@@ -233,10 +296,16 @@ async function deleteSession() {
     return;
   }
 
-  await api(`/api/sessions/${state.activeSessionId}?deleteData=0`, { method: 'DELETE' });
-  saveActiveSession('');
+  await api(`/api/sessions/${id}?deleteData=0`, { method: 'DELETE' });
+  const wasActive = id === state.activeSessionId;
+  if (wasActive) {
+    saveActiveSession('');
+  }
   await loadSessions();
-  await clearSessionUi();
+
+  if (wasActive) {
+    await clearSessionUi();
+  }
 }
 
 async function apiSession(endpoint, options) {
@@ -577,7 +646,6 @@ async function bootstrap() {
   renderLogsVisibility();
 
   await loadSessions();
-  renderSessions();
 
   if (state.activeSessionId) {
     await loadStatus();
@@ -603,40 +671,55 @@ async function bootstrap() {
 
 elements.refreshSessionsBtn.addEventListener('click', loadSessions);
 
-elements.sessionSelect.addEventListener('change', async () => {
-  const id = elements.sessionSelect.value;
-  await onSessionChanged(id);
-});
+if (elements.sessionsTableBody) {
+  elements.sessionsTableBody.addEventListener('click', async (event) => {
+    const actionButton = event.target.closest('button[data-action]');
+    if (actionButton) {
+      const action = actionButton.getAttribute('data-action');
+      const sessionId = actionButton.getAttribute('data-session-id');
+      if (!sessionId) {
+        return;
+      }
+
+      try {
+        if (action === 'start') {
+          await startSession(sessionId);
+        } else if (action === 'stop') {
+          await stopSession(sessionId);
+        } else if (action === 'delete') {
+          await deleteSession(sessionId);
+        }
+      } catch (error) {
+        const labelMap = { start: 'запуску', stop: 'зупинки', delete: 'видалення' };
+        const label = labelMap[action] || 'дії';
+        elements.sessionInfo.textContent = `Помилка ${label} сесії: ${error.message}`;
+      }
+      return;
+    }
+
+    const row = event.target.closest('tr[data-session-id]');
+    if (!row) {
+      return;
+    }
+
+    const sessionId = row.getAttribute('data-session-id');
+    if (!sessionId || sessionId === state.activeSessionId) {
+      return;
+    }
+
+    try {
+      await onSessionChanged(sessionId);
+    } catch (error) {
+      elements.sessionInfo.textContent = `Помилка перемикання: ${error.message}`;
+    }
+  });
+}
 
 elements.createSessionBtn.addEventListener('click', async () => {
   try {
     await createSession();
   } catch (error) {
     elements.sessionInfo.textContent = `Помилка створення сесії: ${error.message}`;
-  }
-});
-
-elements.startSessionBtn.addEventListener('click', async () => {
-  try {
-    await startSession();
-  } catch (error) {
-    elements.sessionInfo.textContent = `Помилка запуску: ${error.message}`;
-  }
-});
-
-elements.stopSessionBtn.addEventListener('click', async () => {
-  try {
-    await stopSession();
-  } catch (error) {
-    elements.sessionInfo.textContent = `Помилка зупинки: ${error.message}`;
-  }
-});
-
-elements.deleteSessionBtn.addEventListener('click', async () => {
-  try {
-    await deleteSession();
-  } catch (error) {
-    elements.sessionInfo.textContent = `Помилка видалення: ${error.message}`;
   }
 });
 
